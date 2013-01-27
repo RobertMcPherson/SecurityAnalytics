@@ -1,0 +1,42 @@
+portmap    2120 root    3u  IPv4               5970                  UDP *:sunrpc 
+portmap    2120 root    4u  IPv4               5971                  TCP *:sunrpc (LISTEN)
+rpc.statd  2153 root    3u  IPv4               6089                  UDP *:ldaps 
+rpc.statd  2153 root    6u  IPv4               6072                  UDP *:servstat 
+rpc.statd  2153 root    7u  IPv4               6098                  TCP *:msdp (LISTEN)
+sshd       2446 root    3u  IPv6               6632                  TCP *:ssh (LISTEN)
+ntpd       2472 root   16u  IPv4               6768                  UDP *:ntp 
+ntpd       2472 root   17u  IPv6               6769                  UDP *:ntp 
+ntpd       2472 root   18u  IPv6               6770                  UDP [fe80::214:5eff:fe46:8464]:ntp 
+ntpd       2472 root   19u  IPv6               6771                  UDP localhost.localdomain:ntp 
+ntpd       2472 root   20u  IPv4               6772                  UDP localhost:ntp 
+ntpd       2472 root   21u  IPv4               6773                  UDP uiftp.dlir.higov.net:ntp 
+smbd       2542 root   20u  IPv4               6965                  TCP *:microsoft-ds (LISTEN)
+smbd       2542 root   21u  IPv4               6966                  TCP *:netbios-ssn (LISTEN)
+nmbd       2545 root    6u  IPv4               6849                  UDP *:netbios-ns 
+nmbd       2545 root    7u  IPv4               6850                  UDP *:netbios-dgm 
+nmbd       2545 root    8u  IPv4               6852                  UDP uiftp.dlir.higov.net:netbios-ns 
+nmbd       2545 root    9u  IPv4               6853                  UDP uiftp.dlir.higov.net:netbios-dgm 
+avahi-dae  2610 root   13u  IPv4               7009                  UDP *:mdns 
+avahi-dae  2610 root   14u  IPv6               7010                  UDP *:mdns 
+avahi-dae  2610 root   15u  IPv4               7011                  UDP *:41797 
+avahi-dae  2610 root   16u  IPv6               7012                  UDP *:57732 
+miniserv.  2717 root    5u  IPv4               8386                  TCP *:ndmp (LISTEN)
+miniserv.  2717 root    6u  IPv4               8387                  UDP *:ndmp 
+3          2790 root    3u  IPv4               8557                  TCP *:39836 (LISTEN)
+smbd      12694 root   24u  IPv4            2203365                  TCP uiftp.dlir.higov.net:microsoft-ds->10.130.36.30:blockade-bpsp (ESTABLISHED)
+smbd      16470 root    5u  IPv4            2212950                  TCP uiftp.dlir.higov.net:microsoft-ds->10.130.39.58:iad3 (ESTABLISHED)
+smbd      16589 root   24u  IPv4            2213268                  TCP uiftp.dlir.higov.net:microsoft-ds->10.130.25.145:nsstp (ESTABLISHED)
+smbd      16651 root    5u  IPv4            2213438                  TCP uiftp.dlir.higov.net:microsoft-ds->10.131.128.67:cplscrambler-al (ESTABLISHED)
+smbd      16667 root   24u  IPv4            2213479                  TCP uiftp.dlir.higov.net:microsoft-ds->10.130.25.199:1028 (ESTABLISHED)
+smbd      16703 root    5u  IPv4            2213559                  TCP uiftp.dlir.higov.net:microsoft-ds->10.130.25.100:iad1 (ESTABLISHED)
+smbd      16735 root   24u  IPv4            2213664                  TCP uiftp.dlir.higov.net:microsoft-ds->10.130.25.187:activesync (ESTABLISHED)
+smbd      16746 root    5u  IPv4            2213694                  TCP uiftp.dlir.higov.net:microsoft-ds->10.131.75.150:amt-esd-prot (ESTABLISHED)
+smbd      16757 root   24u  IPv4            2213729                  TCP uiftp.dlir.higov.net:microsoft-ds->10.131.75.175:remote-as (ESTABLISHED)
+smbd      16827 root   24u  IPv4            2213933                  TCP uiftp.dlir.higov.net:microsoft-ds->10.130.25.192:iad2 (ESTABLISHED)
+smbd      16838 root    5u  IPv4            2213965                  TCP uiftp.dlir.higov.net:microsoft-ds->10.131.75.152:ddt (ESTABLISHED)
+smbd      16840 root    5u  IPv4            2213972                  TCP uiftp.dlir.higov.net:microsoft-ds->10.131.128.53:rmiregistry (ESTABLISHED)
+smbd      16856 root   24u  IPv4            2214027                  TCP uiftp.dlir.higov.net:microsoft-ds->10.131.128.60:isoipsigport-2 (ESTABLISHED)
+smbd      16950 root   24u  IPv4            2214300                  TCP uiftp.dlir.higov.net:microsoft-ds->10.130.25.194:ams (ESTABLISHED)
+smbd      16971 root    5u  IPv4            2214369                  TCP uiftp.dlir.higov.net:microsoft-ds->10.131.128.103:blackjack (ESTABLISHED)
+smbd      16977 root    5u  IPv4            2214386                  TCP uiftp.dlir.higov.net:microsoft-ds->10.130.25.101:afrog (ESTABLISHED)
+smbd      17406 root   24u  IPv4            2216788                  TCP uiftp.dlir.higov.net:microsoft-ds->10.130.37.133:blackjack (ESTABLISHED)

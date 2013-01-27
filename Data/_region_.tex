@@ -1,0 +1,14 @@
+\message{ !name(SecurityAnalytics.rnw.tex)}
+\message{ !name(SecurityAnalytics.rnw) !offset(70) }
+\begin{frame}
+<<name="makeCorpus",echo=TRUE,quiet=FALSE,results=tex>>=
+#Read server log - text file
+secureData <- scan("secure.txt", character(0), sep = "\n") # separate each line
+
+#Save as a word corpus
+data <- Corpus(VectorSource(secureData[1:1000],))
+
+inspect(data[1:5]) #Inspect the first five entries in the data
+@ 
+\end{frame}
+\message{ !name(SecurityAnalytics.rnw.tex) !offset(-14) }

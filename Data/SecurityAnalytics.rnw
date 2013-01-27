@@ -1,0 +1,286 @@
+\documentclass[compress,8pt]{beamer}
+\usepackage[latin1]{inputenc}
+\usepackage{pgf,pgfarrows,pgfnodes,pgfautomata,pgfheaps,pgfshade}
+\usepackage{amsmath,amssymb}
+\usepackage[latin1]{inputenc}
+\usepackage{colortbl}
+\usepackage{graphicx}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{verbatim}
+\usepackage{url} %needed for function to handle underscore characters
+\usepackage[section]{placeins}
+\usepackage{Sweave}
+\usepackage{upquote}
+\urlstyle{sf} %style consistent with URL package - can also use rm style
+\usetheme{Singapore}%define the beamer theme
+\setbeamertemplate{navigation symbols}{}%remove navigation symbols
+\setbeamertemplate{section in head/foot shaded}[default][20]
+\setbeamertemplate{headline}{}%remove the navigation header
+%\setbeamertemplate{subsection in head/foot shaded}[default][20]
+%\logo{\includegraphics[width=0.15\textwidth]{nw_logo.jpg}} %change here. I used an eps file logo, you can use jpg or other format
+
+\title{\bfseries{Utilizing the R Statistical Language for Analyzing Server Logs}}
+\author{Ryan Talabis and Robert McPherson}
+\date{January 26, 2013}
+%\institute[Product and Pricing Risk Management]{Product and Pricing Risk Management \\ Nationwide Insurance }
+
+\AtBeginSection[]
+{
+  \begin{frame}
+    \begin{center}
+        \Large{\insertsection}
+    \end{center}
+  \end{frame}
+}
+
+\begin{document}
+
+\begin{frame}
+  \maketitle
+\end{frame}
+
+\begin{frame}
+\frametitle{Outline}
+\tableofcontents
+\end{frame}
+
+\section{Processing the Data}
+
+<<name="setup",echo=FALSE,quiet=TRUE,results=hide>>=
+#Remove any objects from the environment before starting
+rm(list=ls())
+
+#Load libraries
+library(tm)
+library(stringr)
+library(sqldf)
+library(data.table)
+library(outliers)
+library(xtable)
+@ 
+
+\begin{frame}
+  \frametitle{Read in the Data}
+  \begin{itemize}
+  \item Data can be read from text files of server logs.
+  \item An R function called scan is useful for this.
+  \item Corpus function is used to convert data into a corpus, consisting of documents and words.
+  \item Each line in the log can be considered a document, so that comparisons can be made across time.  
+  \end{itemize}
+<<name="readData",echo=TRUE,quiet=FALSE,results=tex>>=
+#Read server log - text file
+secureData <- scan("secure.txt", character(0), sep = "\n") # separate each line
+
+#Save as a word corpus
+data <- Corpus(VectorSource(secureData[1:1000],))
+
+inspect(data[1:5]) #Inspect the first five entries in the data
+@ 
+\end{frame}
+
+\begin{frame}
+  \frametitle{Function to Trim White Space}  
+  \begin{itemize}
+  \item Create a function called, ``trim'', as a convenient way to remove white space in the data transformation process.
+  \item Utilizes the R function, gsub, and regular expressions.
+  \end{itemize}  
+<<name="functionStripWhiteSpace",echo=TRUE,quiet=FALSE,results=tex>>=
+#Function to strip white space from strings
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+@
+\end{frame}
+
+\begin{frame}
+\frametitle{Using Regular Expressions to Parse the Time Stamp}  
+<<name="timeStampRegularExpressions",echo=TRUE,quiet=FALSE,results=tex>>=  
+#Regular expressions for parsing date information
+regexpDate = "[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"
+regexpDay = "\\s[0-9][0-9]\\s"
+regexpMonth = "^[A-Z][a-z][a-z]\\s"
+
+time = trim(str_extract(secureData[1:1000],regexpDate))
+day = trim(str_extract(secureData[1:1000],regexpDay))
+month = trim(str_extract(secureData[1:1000],regexpMonth))
+
+#Make a data frame consisting of month, day, and time columns
+timeStampCols = data.frame(cbind(month, day, time))
+timeStampCols[1:5,]
+@ 
+\end{frame}
+
+\begin{frame}
+\frametitle{Transforming the Text Corpus with the tm_map Function}    
+<<name="transformations",echo=TRUE,quiet=FALSE,results=tex>>=  
+data2 = tm_map(data, stripWhitespace)
+data2 = tm_map(data2, tolower)
+stopWords = c(stopwords("english"),"uiftp","sshd")
+data2 = tm_map(data2, removeWords, stopWords)
+data2 = tm_map(data2, stemDocument)
+data2 = tm_map(data2, removePunctuation)
+data2 = tm_map(data2, removeNumbers)
+inspect(data2[1:5])
+@ 
+\end{frame}
+
+\begin{frame}
+\frametitle{Making a Document Term Matrix with the DocumentTermMatrix Function}  \begin{itemize}
+\item A document term matrix shows the frequency count of each word.
+\item Frequencies are shown for each document.
+\item Documents are in rows.
+\item Terms, or words, are in columns.
+\end{itemize}  
+<<name="documentTermMatrix",echo=TRUE,quiet=FALSE,results=tex>>=  
+#Make a word frequency matrix, with documents as rows, and terms as columns
+dtm = DocumentTermMatrix(data2)
+inspect(dtm[1:5,1:5])
+@ 
+\end{frame}
+
+\begin{frame}
+\frametitle{Removing Sparse Terms}    
+\begin{itemize}
+\item It can be useful to remove infrequently occuring words.
+\item Sometimes the most significant terms are the most fequently occuring ones.
+\item Use the removeSparseTerms function. 
+\end{itemize}  
+<<name="removeSparseTerms",echo=TRUE,quiet=FALSE,results=tex>>=  
+#Remove and inspect sparse terms, with at least 80% sparse occurence
+dtm = removeSparseTerms(dtm, 0.85)
+inspect(dtm[1:5,1:5])
+@ 
+\end{frame}
+
+\begin{frame}
+\frametitle{Transposing the Term Matrix}    
+\begin{itemize}
+\item Can opt to have the terms in rows, and the documents in columns. 
+\item Use the TermDocumentMatrix for this.
+\item Same as the DocumentTermMatrix, but transposed.
+\end{itemize}  
+<<name="termDocumentMatrix",echo=TRUE,quiet=FALSE,results=tex>>=  
+#Make a word frequency matrix, with terms as rows, and documents as columns
+dtm2 = TermDocumentMatrix(data2)
+inspect(dtm2)
+@ 
+\end{frame}
+
+\section{Date and Time Stamp Handling}
+
+\begin{frame}
+\frametitle{Append Time Element Columns to Text Frequency Columns}    
+\begin{itemize}
+\item Convert the word corpus to text, so that it can be appended.
+\item The example below includes a version with all time stamp elements, and another with only the month.
+\end{itemize}  
+<<name="appendTimeStamp",echo=TRUE,quiet=FALSE,results=tex>>=  
+#Add month, day, and time columns to the document term matrix
+#First, turn the dtm into a plain text object
+dtmText = inspect(dtm)
+
+#This data frame version has the full month, day, and time stamp 
+dtmStamp = data.frame(cbind(timeStampCols, dtmText))
+
+#This data frame version only has the month appended, not day or time
+dtmMonth = data.frame(cbind(month, dtmText))
+@ 
+\end{frame}
+
+\begin{frame}
+\frametitle{Utilize SQL as One Means of Grouping Data}    
+\begin{itemize}
+\item Utilize the sqldf function.
+\item This function allows for writing SQL queries against an R data frame.
+\end{itemize}  
+<<name="sqldfQueries",echo=TRUE,quiet=FALSE,results=tex>>=  
+#Get counts of entries for each month for use in bonferoni outlier detection
+sqldf("select month, count(*) from dtmStamp group by month")
+sqldf("select month, count(*) from dtmMonth group by month")
+
+#Sum up the frequencies each of the top terms for each month
+topTermsByMonth = sqldf("select month
+,count(*) as rowCount
+,sum(user) as user
+,sum(invalid) as invalid
+,sum(richard) as richard
+,sum(port) as port
+,sum(password) as password
+,sum(ssh) as ssh
+,sum(uid) as uid
+,sum(session) as session
+from dtmMonth group by month")
+
+aggregate(dtmMonth[,-1], by = list(factor(dtmMonth$month)), sum)
+@ 
+\end{frame}
+
+\section{Text Analysis}
+
+\begin{frame}
+\frametitle{Finding High Frequency Terms}    
+\begin{itemize}
+\item Frequently occuring words can be identified with the findFreqTerms function
+\item Can select words that occur within a low and high frequency range
+\item findFreqTerms(x, lowfreq = 0, highfreq = Inf) 
+\item Can also specify only a single, lower bound, with upper bound defaulting to infinity  
+\end{itemize}  
+<<name="findFrequentTerms",echo=TRUE,quiet=FALSE,results=tex>>=  
+#Find the top 20 most frequent terms
+findFreqTerms(dtm, 20)
+@ 
+\end{frame}
+
+\begin{frame}
+\frametitle{Find Associated Terms}    
+\begin{itemize}
+\item Can find terms in the text that are associated with a given term.
+\item Use the findAssocs function
+\item Can specify the minimum correlation.
+\end{itemize}  
+<<name="findAssociatedTerms",echo=TRUE,quiet=FALSE,results=tex>>=  
+#Find associated terms with the term, "root", and a correlation of at least 0.4
+findAssocs(dtm, "session", 0.4)
+findAssocs(dtm, "user", 0.4)
+findAssocs(dtm, "port", 0.4)
+@ 
+\end{frame}
+
+\begin{frame}
+\frametitle{Create a Dictionary}    
+\begin{itemize}
+\item Create a dictionary specifying a subset of terms to work with
+\item Use the Dictionary function.
+\end{itemize}  
+<<name="dictionary",echo=TRUE,quiet=FALSE,results=tex>>=  
+##Other functions related to selecting specific terms
+
+#Create a dictionary: a subset of terms
+d = Dictionary(c("root", "richard", "invalid", "session"))
+
+#Use dictionary to make a matrix with only the dictionary terms
+dtm_dictionary = TermDocumentMatrix(data2, list(dictionary = d))
+inspect(dtm_dictionary)
+@ 
+\end{frame}
+
+<<name="sandbox",echo=FALSE,quiet=TRUE,results=hide>>=
+#Bonferoni outlier detection
+
+
+##Second version of grouping, utilizing a more automated technique
+#dtmMonth.dt <- data.table(dtmMonth)
+#setkey(data.dt, month)
+#dtmMonth.dt[, lapply(.SD, sum), by = list(month)]
+
+
+#by(iris[, 1:4], Species, mean)
+#by(dtmMonth[,-1], dtmMonth$month, sum)
+#is.numeric(dtmMonth[,-1])
+
+?apply
+?aggregate
+
+#plot(topTermsByMonth$session~topTermsByMonth$rowCount) 
+@
+
+\end{document}

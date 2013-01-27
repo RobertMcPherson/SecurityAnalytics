@@ -1,0 +1,2557 @@
+\documentclass[compress,8pt]{beamer}
+\usepackage[latin1]{inputenc}
+\usepackage{pgf,pgfarrows,pgfnodes,pgfautomata,pgfheaps,pgfshade}
+\usepackage{amsmath,amssymb}
+\usepackage[latin1]{inputenc}
+\usepackage{colortbl}
+\usepackage{graphicx}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{verbatim}
+\usepackage{url} %needed for function to handle underscore characters
+\usepackage[section]{placeins}
+\usepackage{Sweave}
+\usepackage{upquote}
+\urlstyle{sf} %style consistent with URL package - can also use rm style
+\usetheme{Singapore}%define the beamer theme
+\setbeamertemplate{navigation symbols}{}%remove navigation symbols
+\setbeamertemplate{section in head/foot shaded}[default][20]
+\setbeamertemplate{headline}{}%remove the navigation header
+%\setbeamertemplate{subsection in head/foot shaded}[default][20]
+\logo{\includegraphics[width=0.15\textwidth]{nw_logo.jpg}} %change here. I used an eps file logo, you can use jpg or other format
+
+\title{\bfseries{Outlier Analysis of Nationwide Catastrophe Exposure
+    Data\\ Net of Growth Effects\\ September 2012 vs. September 2011}}
+\author{Nationwide Product and Pricing Risk Management\\ PROPRIETARY AND CONFIDENTIAL}
+\date{November 27, 2012}
+%\institute[Product and Pricing Risk Management]{Product and Pricing Risk Management \\ Nationwide Insurance }
+
+\AtBeginSection[]
+{
+  \begin{frame}
+    \begin{center}
+        \Large{\insertsection}
+    \end{center}
+  \end{frame}
+}
+
+%\AtBeginSubsection[]
+%{
+%  \begin{frame}
+%    \begin{center}
+%        \Large{\insertsubsection}
+%    \end{center}
+%  \end{frame}
+%}
+
+\begin{document}
+
+\begin{frame}
+  \maketitle
+\end{frame}
+
+\begin{frame}
+\frametitle{Outline}
+\tableofcontents%[part=1,pausesections]
+\end{frame}
+
+\section{Introduction}
+
+\begin{frame}
+ \frametitle{Data Validation for September 2012 Catastrophe Exposure,
+   Net of Growth Effects}
+\begin{itemize}
+\item Year-over-year analysis of significant data changes
+\item Compares change in each attribute, to overall risk count growth
+\item Results in outlier detection net of growth effects
+\item All data is as of month-end, September, 2012
+\item Analysis consists of:
+   \begin{itemize}
+     \item Outlier detection
+     \item Identification of empty values this year, where data existed last year
+     \item identification of empty values last year, where data exists
+       this year
+%     \item Replacement cost ratio comparisons
+   \end{itemize}
+\item This analysis includes all PCIO exposures, except for Scottsdale
+  and Harleysville.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{How to Read Outlier Exhibits}
+\begin{itemize}
+\item Each slide has a table containing outlier(s), and a scatterplot graph
+\item Only combinations of peril, business, division, and attribute
+  which contain outliers are shown in the slides.
+\item If a change in an attribute is identical to risk count growth,
+  points will line up diagonally on the regression line.
+\item Outliers are clearly visible, shown as points that are far
+  removed from the regression line.
+\item States shown above the line are those tha increased in ranking;
+  below the line are states that declined.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Peril Abbreviations}
+\begin{description}
+\item [CP] Combined Perils
+\item [EQ] Earthquake
+\item [FF] Fire Following
+\item [HU] Hurricane
+\item [SL] Sprinkler Leakage
+\item [ST] Severe Thunderstorm
+\end{description}
+\end{frame}
+
+\begin{frame}
+\frametitle{Business Line Abbreviations}
+\begin{description}
+\item [CA] Commercial Auto
+\item [CP] Commercial Property
+\item [PA] Personal Auto
+\item [PB] Personal Boats
+\item [PP] Personal Property
+\item [PT] Personal Toys
+\end{description}
+\end{frame}
+
+\begin{frame}
+\frametitle{Financial Division Abbreviations}
+\begin{description}
+\item [C] Private Client
+\item [E] Exclusive Agency
+\item [G] Agribusiness
+\item [I] Independent Agency
+\item [T] THI
+\end{description}
+\end{frame}
+
+\begin{frame}
+\frametitle{Outlier Detection Method}
+\begin{itemize}
+\item Bonferoni outlier detection method was used to identify outliers.
+\item The Bonferroni method is less sensitive to false positives than
+  outlier detection based on percentage increases, standard
+  deviations (i.e., z-score), or other methods.
+  \begin{itemize}
+    \item Identifying ouliers based on percentage increase thresholds produces
+      far more false positives for small denominator values, and too few
+      for large denominators.
+    \item The Standard deviation method reduces false positives somewhat,
+      but not enough.
+    \item The Bonferroni method is more balanced across all value ranges.
+  \end{itemize}
+\item The Bonferroni outlier table at the top of each slide contains statistically significant outlier(s).
+\item The Bonferroni method detects outliers based on t-test of regression
+  coefficients, at the 99.9\% confidence level.
+\item An additional filter was added so that only those states that
+  changed by at least plus or minus 10\% can be considered outliers.
+\item Without outlier detection, thousands of slides would be
+  required to show all the combinations of peril type, business line,
+  and financial division, for each and every data attribute.
+\end{itemize}
+\end{frame}
+
+\section{Numerical Data}
+
+\subsection{Outlier Detection}
+
+<<name="LoadPackagesAndDatabaseConnection",echo=FALSE,quiet=TRUE,results=hide>>=
+rm(list=ls())
+
+#Load required packages
+require(xtable) #export to LaTeX
+require(RODBC) #ODBC connection
+require(bigmemory)
+require(stringr)
+require(car)
+require(outliers)
+require(sqldf)
+require(calibrate)
+require(MASS) #for robust regression methods
+
+##########################################
+## Type the input parameters for each run
+##########################################
+
+#Project name:
+projName = paste("Aon2012")
+
+#Type database source name (dsn) for ODBC connection
+dataSourceName = "campfire_quake"
+
+currentPeriodName = "Sep_2012" #avoid spaces
+previousPeriodName = "Sep_2011" #avoid spaces
+
+#Type significance cutoff amount to increase or decrease outlier detection sensitivity
+sigCutoff = 0.05 #Bonferonni outlier detection p-values higher than this will be ignored
+correlSigCutoff = 0 #Ignor correlation p-values <= this amount; remove strongest correlations
+rankCutoff = 0 #Bonferroni outliers with rankings lower than this will be ignored.
+percChgCutoff = 10#% --Enter whole percent, rather than decimal value. Percent increases less than this amount will be ignored.
+
+#Folder locations for output
+tableOutput = "Tables/"
+figureOutput = "Figures/"
+excelOutput = "./"
+
+##########################################
+##########################################
+
+# Convert NAs to zeros
+NaAdjust <- function(vector){
+     vector[is.na(vector)] <- 0
+     vector[is.na(vector)] <- 0 #get rid of NAs produced by coersion of zero values from is.na()
+     as.numeric(vector)
+}
+
+##Non-aggregated data source tables (i.e., raw unstacked data)
+#Unstacked raw data for current period - NOT AN INPUT
+dataTableRawUnstackedCur = paste("UnstackedExposures_Cur_",projName,sep="")
+
+#Unstacked raw data for previous period - NOT AN INPUT
+dataTableRawUnstackedPrev = paste("UnstackedExposures_Prev_",projName,sep="")
+
+#Make connection to database
+connection = odbcConnect(dsn = dataSourceName)
+@
+
+<<name="DropNumericalCur",echo=FALSE,quiet=TRUE,results=hide>>=
+sqlQuery(connection, paste("DROP TABLE StateNumericalCur_",projName,sep=""))
+@
+<<name="DropNumericalPrev",echo=FALSE,quiet=TRUE,results=hide>>=
+sqlQuery(connection, paste("DROP TABLE StateNumericalPrev_",projName,sep=""))
+@
+
+<<name="DropTableConBldgCategoriesPrev",echo=FALSE,quiet=TRUE,results=hide>>=
+sqlQuery(connection,paste("DROP TABLE ConBldgCategories_Prev_",projName,sep=""))
+@
+
+<<name="DropTableConBldgCategories_Cur",echo=FALSE,quiet=TRUE,results=hide>>=
+sqlQuery(connection,paste("DROP TABLE ConBldgCategories_Cur_",projName,sep=""))
+@
+
+<<name="DropTableOccCategories_Prev",echo=FALSE,quiet=TRUE,results=hide>>=
+sqlQuery(connection,paste("DROP TABLE OccCategories_Prev_",projName,sep=""))
+@
+
+<<name="DropTableOccCategories_Cur",echo=FALSE,quiet=TRUE,results=hide>>=
+sqlQuery(connection,paste("DROP TABLE OccCategories_Cur_",projName,sep=""))
+@
+
+<<name="DropTableSecondaryCategories_Prev",echo=FALSE,quiet=TRUE,results=hide>>=
+sqlQuery(connection,paste("DROP TABLE SecondaryCategories_Prev_",projName,sep=""))
+@
+
+<<name="DropTableSecondaryCategories_Cur",echo=FALSE,quiet=TRUE,results=hide>>=
+sqlQuery(connection,paste("DROP TABLE SecondaryCategories_Cur_",projName,sep=""))
+@
+
+\section{Numerical Data}
+
+\subsection{Outlier Detection}
+
+<<name="PeriodOverPeriodNumericalQueries",echo=FALSE,quiet=TRUE,results=hide>>=
+##############################################
+## Period over Period Replacement Value Comparisons
+##############################################
+
+# State by state - Building Replacement Comparison
+
+#Current Period
+queryStateNumericalCur <- paste("SELECT
+ left(FIPS_StateAndCounty,2) as StateCode
+ ,left(Business,2) as Business
+ ,substring(Business,3,1) as FinancialDivision
+ ,peril_cd
+ ,sum(cast(RepValBldg as float)) as RepValBldg_Cur
+ ,sum(cast(RepValOStr as float)) as RepValOStr_Cur
+ ,sum(cast(RepValCont as float)) as RepValCont_Cur
+ ,sum(cast(RepValTime as float)) as RepValTime_Cur
+ ,sum(cast(RVDaysCovered as float)) as RVDaysCovered_Cur
+ ,sum(cast(RiskCount as float)) as RiskCount_Cur
+ ,sum(cast(Premium as float)) as Premium_Cur
+ ,sum(cast(YearBuilt as float)) as YearBuilt_Cur
+ ,sum(cast(Stories as float)) as Stories_Cur
+ ,sum(cast(Limit1 as float)) as Limit1_Cur
+ ,sum(cast(Limit2 as float)) as Limit2_Cur
+ ,sum(cast(Limit3 as float)) as Limit3_Cur
+ ,sum(cast(Limit4 as float)) as Limit4_Cur
+ ,sum(cast(Ded1 as float)) as Ded1_Cur
+ ,sum(cast(Ded2 as float)) as Ded2_Cur
+ ,sum(cast(Ded3 as float)) as Ded3_Cur
+ ,sum(cast(Ded4 as float)) as Ded4_Cur
+ INTO StateNumericalCur_",projName,"
+ FROM ",dataTableRawUnstackedCur,"
+ GROUP BY left(FIPS_StateAndCounty,2)
+,left(Business,2)
+,substring(Business,3,1)
+,peril_cd",sep="")
+
+sqlQuery(connection, queryStateNumericalCur)
+#sqlQuery(connection,"select * from #StateNumericalCur")
+
+#Previous Period
+queryStateNumericalPrev <- paste("SELECT
+ left(FIPS_StateAndCounty,2) as StateCode
+ ,left(Business,2) as Business
+ ,substring(Business,3,1) as FinancialDivision
+ ,peril_cd
+ ,sum(cast(RepValBldg as float)) as RepValBldg_Prev
+ ,sum(cast(RepValOStr as float)) as RepValOStr_Prev
+ ,sum(cast(RepValCont as float)) as RepValCont_Prev
+ ,sum(cast(RepValTime as float)) as RepValTime_Prev
+ ,sum(cast(RVDaysCovered as float)) as RVDaysCovered_Prev
+ ,sum(cast(RiskCount as float)) as RiskCount_Prev
+ ,sum(cast(Premium as float)) as Premium_Prev
+ ,sum(cast(YearBuilt as float)) as YearBuilt_Prev
+ ,sum(cast(Stories as float)) as Stories_Prev
+ ,sum(cast(Limit1 as float)) as Limit1_Prev
+ ,sum(cast(Limit2 as float)) as Limit2_Prev
+ ,sum(cast(Limit3 as float)) as Limit3_Prev
+ ,sum(cast(Limit4 as float)) as Limit4_Prev
+ ,sum(cast(Ded1 as float)) as Ded1_Prev
+ ,sum(cast(Ded2 as float)) as Ded2_Prev
+ ,sum(cast(Ded3 as float)) as Ded3_Prev
+ ,sum(cast(Ded4 as float)) as Ded4_Prev
+ INTO StateNumericalPrev_",projName,"
+ FROM ",dataTableRawUnstackedPrev,"
+ GROUP BY left(FIPS_StateAndCounty,2)
+,left(Business,2)
+,substring(Business,3,1)
+,peril_cd",sep="")
+
+sqlQuery(connection, queryStateNumericalPrev)
+@
+
+<<name="PeriodOverPeriodNumericalLaTeX",echo=FALSE,quiet=TRUE,results=tex>>=
+# store and merge data for previous and current periods
+numCategoriesPrevTbl = sqlQuery(connection,paste("SELECT * FROM StateNumericalPrev_",projName,sep=""))
+numCategoriesCurTbl = sqlQuery(connection,paste("SELECT * FROM StateNumericalCur_",projName,sep=""))
+
+attributeNames = colnames(numCategoriesPrevTbl)
+attributeNamesUnderScore = attributeNames[c(-1,-2,-3,-4)]
+attributeNames = as.vector(str_match(attributeNamesUnderScore, pattern="^[^_]*"))
+
+allNumericalTbl = merge(numCategoriesPrevTbl,numCategoriesCurTbl,all=TRUE,by=c("StateCode","Business","FinancialDivision","peril_cd"),sort=TRUE,suffixes=c("_Prev","_Cur"),incomparables=0)
+
+riskCountDiff = allNumericalTbl$RiskCount_Cur - allNumericalTbl$RiskCount_Prev
+riskCountDiff = cbind(allNumericalTbl[,1:4],riskCountDiff)
+
+allNumericalTblNoNAs = apply(allNumericalTbl[,c(-1,-2,-3,-4)],2,NaAdjust)
+allNumericalTbl = cbind(allNumericalTbl[,1:4],allNumericalTblNoNAs)
+
+# Add text labels for states
+queryStateLabels = paste("SELECT
+*
+FROM pml_common.dbo.state_decode
+")
+
+stateLabels = sqlQuery(connection,queryStateLabels)
+
+allNumericalTbl = sqldf("SELECT
+b.state_cd_txt
+,a.*
+FROM allNumericalTbl a
+LEFT JOIN stateLabels b
+ON StateCode = fips_st
+")
+
+beginVar1 = 5
+beginVar2 = ((length(allNumericalTbl[1,]) - 4) / 2) + 5
+n = (length(allNumericalTbl[1,]) - 5) / 2
+allNumericalTblColNames = colnames(allNumericalTbl[,c(-1,-2,-3,-4,-5)])
+primaryPerilLvls = levels(as.factor(allNumericalTbl[,"peril_cd"]))
+perilLength = length(primaryPerilLvls)
+primaryBusLvls = levels(as.factor(allNumericalTbl[,"Business"]))
+busLength = length(primaryBusLvls)
+primaryDivLvls = levels(as.factor(allNumericalTbl[,"FinancialDivision"]))
+divLength = length(primaryDivLvls)
+
+emptyPrevPeriod = NA
+emptyCurPeriod = NA
+p = 1
+q = 1
+
+#i=1;j=1;k=3;m=6 #CP,CA,RiskCount
+#i=2;j=2;k=2;m=8 #EQ,CP,E,YearBuilt
+#i=4;j=5;k=2;m=2
+#i=2;j=1;k=4;m=2
+#first loop goes through each column, which represents the attributes
+for(m in 1:n){
+for(i in 1:perilLength){
+    perilIndex = which(allNumericalTbl$peril_cd == primaryPerilLvls[i])
+    primaryYoYPeril = allNumericalTbl[perilIndex,]
+    riskCountDiffYoYPeril = riskCountDiff[perilIndex,]
+    for(j in 1:busLength){
+        busIndex = which(primaryYoYPeril$Business == primaryBusLvls[j])
+        if(length(allNumericalTbl[busIndex,1]) > 0) {
+            primaryYoYBusiness = primaryYoYPeril[busIndex,]
+            riskCountDiffYoYBusiness = riskCountDiffYoYPeril[busIndex,]
+            for(k in 1:divLength){
+                divisionIndex = which(primaryYoYBusiness$FinancialDivision == primaryDivLvls[k])
+                if(length(primaryYoYBusiness[divisionIndex,1]) > 0) {
+                        tbl = (primaryYoYBusiness[divisionIndex,])
+                        riskCountDiffTbl = (riskCountDiffYoYBusiness[divisionIndex,])
+                        attributeNamePrev = allNumericalTblColNames[m]
+                        attributeNameCur = allNumericalTblColNames[floor(m+n)]
+                        prev = NaAdjust(tbl[,beginVar1+m])
+                        cur = NaAdjust(tbl[,beginVar2+m])
+                        x = NaAdjust(riskCountDiffTbl[,5])
+                        y = NaAdjust(tbl[,beginVar2+m]) - NaAdjust(tbl[,beginVar1+m])
+                        x2 = tbl[,beginVar1+m]
+                        y2 = tbl[,beginVar2+m]
+                        perc = format(NaAdjust(((cur / prev) - 1) * 100),digits=c(2))
+                        test = 0
+
+                        sumTest = try(sum(prev,cur),TRUE)
+                        sumTestX = try(sum(prev),TRUE)
+                        sumTestY = try(sum(cur),TRUE)
+
+#                        print(paste("CHECK: ",attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],sep=""))
+
+                        #isolate cases where previous is zeros, but cur is not
+                        if(sumTestX == 0 && sumTestY > 0){
+                            if(is.na(emptyPrevPeriod)){
+                                AttributeNm = attributeNames[m]
+                                tbl2 = cbind(AttributeNm,tbl)
+                                emptyPrevPeriod = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep="")); break}
+                            else if(!is.na(emptyPrevPeriod[1,1])){
+                                    AttributeNm = attributeNames[m]
+                                    tbl2 = cbind(AttributeNm,tbl)
+                                    temp = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep=""))}
+                                    emptyPrevPeriod = rbind(emptyPrevPeriod,temp)
+                        }
+
+                        #isolate cases where current is zeros, but prev is not
+                        if(sumTestY == 0 && sumTestX > 0){
+                            if(is.na(emptyCurPeriod)){
+                                AttributeNm = attributeNames[m]
+                                tbl2 = cbind(AttributeNm,tbl)
+                                emptyCurPeriod = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep="")); break}
+                            else if(!is.na(emptyCurPeriod[1,1])){
+                                    AttributeNm = attributeNames[m]
+                                    tbl2 = cbind(AttributeNm,tbl)
+                                    temp = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep=""))}
+                                    emptyCurPeriod = rbind(emptyCurPeriod,temp)
+                        }
+
+                        #only continue if all column sums are greater than zero
+                        if(sumTestX > 0 && sumTestY > 0 && !is.character(sumTest)){
+                            notZerosIndx = which(abs(y) > 0)
+                            x = x[notZerosIndx]
+                            y = y[notZerosIndx]
+                            x2 = format(x2[notZerosIndx],big.mark=",")
+                            y2 = format(y2[notZerosIndx],big.mark=",")
+                            perc = format(perc[notZerosIndx],digits=2)
+                            states = as.vector(tbl$state_cd_txt[notZerosIndx])
+                            tableData = data.frame(cbind(states,y2,x2,perc))
+
+                            x = rank(x)
+                            y = rank(y)
+
+                            colnames(tableData) <- c("State",currentPeriodName,previousPeriodName,"Percent_Change")
+
+                            outliers = try(outlierTest(lm(y~x),cutoff=0.05,n.max=Inf))
+                            outlierIndices = as.numeric(attr(outliers[[1]],"names"))
+                            outlierRanks = c(x[outlierIndices],y[outlierIndices])
+                            outlierTbl = tableData[outlierIndices,] #for LaTeX Table
+                            outlierPerc = max(perc[outlierIndices])
+                            rankFilterTest = max(outlierRanks)
+#correlSigCutoff = 0
+                            if(length(outlierIndices) > 0
+                               && !is.na(outliers$bonf.p[[1]])
+                               && outliers$bonf.p[[1]] < sigCutoff
+                               && rankFilterTest > rankCutoff
+                               && as.numeric(outlierPerc) > percChgCutoff
+                               && try(cor.test(x,y)$p.value) > correlSigCutoff){
+
+                                    cat("\\begin{frame}[shrink=5]\n")
+                                    cat("\\frametitle{",attributeNames[m],", Bus. Line: ",primaryBusLvls[j],", Peril: ",primaryPerilLvls[i],", Division: ",primaryDivLvls[k],"}\n",sep="")
+
+                                    #Make LaTeX Table
+                                    LaTeXtable = xtable(format(outlierTbl,big.mark=",",scientific=FALSE,digits=2),label=paste(attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],sep=""),digits=c(0,0,0,0,2),align="rlrrr")
+                                    print(LaTeXtable,table.placement="tbp",size="\\tiny",big.mark=",",include.rownames=FALSE)
+
+                                    #Make outlier scatterplot
+                                    row.names(tableData) <- as.vector(tableData$State)
+                                    tableData = tableData[,-1]
+
+                                    pdf(paste(figureOutput,attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],".pdf",sep=""))
+                                    try(scatterplot(x,y,xlab="Ranking of Overall Risk Count Growth",ylab=paste(attributeNames[m]," Ranking of Change in Sum",sep=""),id.n=10,labels=row.names(tableData),boxplots=FALSE,smooth=FALSE,spread=FALSE),silent=FALSE)
+                                    dev.off()
+
+                                    cat("\\begin{figure}\n")
+                                    cat("\\centering\n")
+                                    cat("\\includegraphics[width=.60\\textwidth]{",figureOutput,attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],".pdf}\n",sep="")
+                                    cat("\\caption{Year-over-year scatter plot comparison of ",attributeNames[m],"}\n",sep="")
+                                    cat("\\label{fig:",attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],"}\n",sep="")
+                                    cat("\\end{figure}\n")
+                                    cat("\\end{frame}\n\n")
+
+#                                    print(paste("CHECK: ",attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],sep=""))
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+if(!is.na(emptyPrevPeriod)){
+    write.csv(emptyPrevPeriod,paste(excelOutput,"NumericalAttributesPrevPeriod.csv",sep=""))
+    if(length(emptyPrevPeriod[,1]) < 30){
+        cat("\n\\subsection{Numerical Attributes with Empty Previous Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Numerical Attributes with Values Currently, and No Values Previously}\n")
+        LaTeXtable = xtable(emptyPrevPeriod
+            ,caption=paste("Data is now appearing in these combinations where there was none previously. Totals are summations.")
+            ,label="NumericalRiskEmptyPrev",digits=c(0,0,0,0,0,0,0))
+            print(LaTeXtable,table.placement="tbp",size="\\tiny")
+        cat("\\end{frame}\n\n")
+    }
+    if(length(emptyPrevPeriod[,1]) >= 30){
+        cat("\n\\subsection{Numerical Attributes with Empty Previous Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Numerical Attributes with Values Currently, and No Values Previously}\n")
+        cat("There are too many instances to include in a slide. The results were automatically exported to Excel for further review.\n")
+        cat("\\end{frame}\n\n")
+    }
+}
+
+if(!is.na(emptyCurPeriod)){
+    write.csv(emptyCurPeriod,paste(excelOutput,"NumericalAttributesCurPeriod.csv",sep=""))
+    if(length(emptyCurPeriod[,1]) < 30){
+        cat("\n\\subsection{Numerical Attributes with Empty Current Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Numerical Attributes with No Values Currently, and Values Previously}\n")
+        LaTeXtable = xtable(emptyCurPeriod
+            ,caption=paste("No data is appearing in these combinations where there usepd to be data previously. Totals are summations.")
+            ,label="NumericalRiskEmptyCur",digits=c(0,0,0,0,0,0,0))
+            print(LaTeXtable,table.placement="tbp",size="\\tiny")
+        cat("\\end{frame}\n\n")
+    }
+    if(length(emptyCurPeriod[,1]) >= 30){
+        cat("\n\\subsection{Numerical Attributes with Empty Current Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Numerical Attributes with No Values Currently, and Values Previously}\n")
+        cat("There are too many instances to include in a slide. The results were automatically exported to Excel for further review.\n")
+        cat("\\end{frame}\n\n")
+    }
+}
+@
+
+<<name="ConstructionClassesPrevious",echo=FALSE,quiet=TRUE,results=hide>>=
+queryConBldgPrev = paste("select
+left(FIPS_StateAndCounty,2) as StateCode
+,left(Business,2) as Business
+,substring(Business,3,1) as FinancialDivision
+,peril_cd
+--,sum(cast(RiskCount as float)) as RiskCount
+,sum(ConBldg_Unknown) as ConBldg_Unknown
+,sum(ConBldg_WoodFrame) as ConBldg_WoodFrame
+,sum(ConBldg_LightWoodFrame) as ConBldg_LightWoodFrame
+,sum(ConBldg_WoodMasonryVeneer) as ConBldg_WoodMasonryVeneer
+,sum(ConBldg_HeavyTimber) as ConBldg_HeavyTimber
+,sum(ConBldg_WoodOkabe) as ConBldg_WoodOkabe
+,sum(ConBldg_WoodShinkabe) as ConBldg_WoodShinkabe
+,sum(ConBldg_Masonry) as ConBldg_Masonry
+,sum(ConBldg_MasonryAdobe) as ConBldg_MasonryAdobe
+,sum(ConBldg_RubbleStoneMasonry) as ConBldg_RubbleStoneMasonry
+,sum(ConBldg_UnreinforcedMasonry_BearingWall) as ConBldg_UnreinforcedMasonry_BearingWall
+,sum(ConBldg_UnreinforcedMasonry_BearingFrame) as ConBldg_UnreinforcedMasonry_BearingFrame
+,sum(ConBldg_ReinforcedMasonry) as ConBldg_ReinforcedMasonry
+,sum(ConBldg_ReinforcedMasonryShearWallWithMRF) as ConBldg_ReinforcedMasonryShearWallWithMRF
+,sum(ConBldg_ReinforcedMasonryShearWallWithoutMRF) as ConBldg_ReinforcedMasonryShearWallWithoutMRF
+,sum(ConBldg_JoistedMasonry) as ConBldg_JoistedMasonry
+,sum(ConBldg_ReinforcedConcrete) as ConBldg_ReinforcedConcrete
+,sum(ConBldg_ReinforcedConcreteShearWallWithMRF) as ConBldg_ReinforcedConcreteShearWallWithMRF
+,sum(ConBldg_ReinforcedConcreteShearWallWithoutMRF) as ConBldg_ReinforcedConcreteShearWallWithoutMRF
+,sum(ConBldg_ReinforcedConcreteMRFDuctile) as ConBldg_ReinforcedConcreteMRFDuctile
+,sum(ConBldg_ReinforcedConcreteMRFNonDuctile) as ConBldg_ReinforcedConcreteMRFNonDuctile
+,sum(ConBldg_ConcreteTiltUp) as ConBldg_ConcreteTiltUp
+,sum(ConBldg_PrecastConcrete) as ConBldg_PrecastConcrete
+,sum(ConBldg_PrecastConcreteWithShearWall) as ConBldg_PrecastConcreteWithShearWall
+,sum(ConBldg_ReinforcedConcreteMRF) as ConBldg_ReinforcedConcreteMRF
+,sum(ConBldg_ReinforcedConcreteMRFWithURM) as ConBldg_ReinforcedConcreteMRFWithURM
+,sum(ConBldg_Steel) as ConBldg_Steel
+,sum(ConBldg_SteelLightMetal) as ConBldg_SteelLightMetal
+,sum(ConBldg_SteelBracedSteelFrame) as ConBldg_SteelBracedSteelFrame
+,sum(ConBldg_SteelmrfPerimeter) as ConBldg_SteelmrfPerimeter
+,sum(ConBldg_SteelmrfDistributed) as ConBldg_SteelmrfDistributed
+,sum(ConBldg_SpecialLongSpan) as ConBldg_SpecialLongSpan
+,sum(ConBldg_SpecialSemiWindResistive) as ConBldg_SpecialSemiWindResistive
+,sum(ConBldg_WindResistive) as ConBldg_WindResistive
+,sum(ConBldg_UnknownGlass) as ConBldg_UnknownGlass
+,sum(ConBldg_SafetyGlass) as ConBldg_SafetyGlass
+,sum(ConBldg_ImpactResistantGlass) as ConBldg_ImpactResistantGlass
+,sum(ConBldg_MobileHomes) as ConBldg_MobileHomes
+,sum(ConBldg_MobileHomesNoTieDown) as ConBldg_MobileHomesNoTieDown
+,sum(ConBldg_MobileHomesPartTieDown) as ConBldg_MobileHomesPartTieDown
+,sum(ConBldg_MobileHomesFullTieDown) as ConBldg_MobileHomesFullTieDown
+,sum(ConBldg_Railroads) as ConBldg_Railroads
+,sum(ConBldg_Highways) as ConBldg_Highways
+,sum(ConBldg_Runways) as ConBldg_Runways
+,sum(ConBldg_ConcreteDams) as ConBldg_ConcreteDams
+,sum(ConBldg_EarthFillDams) as ConBldg_EarthFillDams
+,sum(ConBldg_AlluviumTunnels) as ConBldg_AlluviumTunnels
+,sum(ConBldg_RockTunnels) as ConBldg_RockTunnels
+,sum(ConBldg_CutAndCoverTunnels) as ConBldg_CutAndCoverTunnels
+,sum(ConBldg_UndergroundLiquidTanks) as ConBldg_UndergroundLiquidTanks
+,sum(ConBldg_UndergroundSolidTanks) as ConBldg_UndergroundSolidTanks
+,sum(ConBldg_OnGroundLiquidTanks) as ConBldg_OnGroundLiquidTanks
+,sum(ConBldg_OnGroundSolidTanks) as ConBldg_OnGroundSolidTanks
+,sum(ConBldg_ElevatedLiquidTanks) as ConBldg_ElevatedLiquidTanks
+,sum(ConBldg_ElevatedSolidTanks) as ConBldg_ElevatedSolidTanks
+,sum(ConBldg_UndergroundPipelines) as ConBldg_UndergroundPipelines
+,sum(ConBldg_AtGradePipelines) as ConBldg_AtGradePipelines
+,sum(ConBldg_MasonryChimneys) as ConBldg_MasonryChimneys
+,sum(ConBldg_ConcreteChimneys) as ConBldg_ConcreteChimneys
+,sum(ConBldg_SteelChimneys) as ConBldg_SteelChimneys
+,sum(ConBldg_ElectricalTransmissionConventionalTowers) as ConBldg_ElectricalTransmissionConventionalTowers
+,sum(ConBldg_ElectricalTransmissionMajorTowers) as ConBldg_ElectricalTransmissionMajorTowers
+,sum(ConBldg_BroadcastTowers) as ConBldg_BroadcastTowers
+,sum(ConBldg_ObservationTowers) as ConBldg_ObservationTowers
+,sum(ConBldg_OffshoreTowers) as ConBldg_OffshoreTowers
+,sum(ConBldg_ResidentialEquipment) as ConBldg_ResidentialEquipment
+,sum(ConBldg_OfficeEquipment) as ConBldg_OfficeEquipment
+,sum(ConBldg_ElectricalEquipment) as ConBldg_ElectricalEquipment
+,sum(ConBldg_MechanicalEquipment) as ConBldg_MechanicalEquipment
+,sum(ConBldg_HighTechnologyEquipment) as ConBldg_HighTechnologyEquipment
+,sum(ConBldg_TrainsTrucksAirplanesEtc) as ConBldg_TrainsTrucksAirplanesEtc
+,sum(ConBldg_PumpingStations) as ConBldg_PumpingStations
+,sum(ConBldg_CompressorStations) as ConBldg_CompressorStations
+,sum(ConBldg_Cranes) as ConBldg_Cranes
+,sum(ConBldg_ConveyorSystems) as ConBldg_ConveyorSystems
+,sum(ConBldg_Canals) as ConBldg_Canals
+,sum(ConBldg_EarthRetainingStructures) as ConBldg_EarthRetainingStructures
+,sum(ConBldg_WaterfrontStructures) as ConBldg_WaterfrontStructures
+,sum(ConBldg_OffshoreStructures) as ConBldg_OffshoreStructures
+,sum(ConBldg_Automobiles) as ConBldg_Automobiles
+INTO ConBldgCategories_Prev_",projName
+," FROM ",dataTableRawUnstackedPrev,"
+--WHERE peril_cd in ('HU')
+GROUP BY left(FIPS_StateAndCounty,2)
+,left(Business,2)
+,substring(Business,3,1)
+,peril_cd
+",sep="")
+
+sqlQuery(connection,queryConBldgPrev)
+@
+
+<<name="OccupancyClassesPrevious",echo=FALSE,quiet=TRUE,results=hide>>=
+queryOccPrev = paste("select
+left(FIPS_StateAndCounty,2) as StateCode
+,left(Business,2) as Business
+,substring(Business,3,1) as FinancialDivision
+,peril_cd
+--,sum(cast(RiskCount as float)) as RiskCount
+,sum(Occ_Unknown) as Occ_Unknown
+,sum(Occ_GeneralResidential) as Occ_GeneralResidential
+,sum(Occ_PermanentDwellingSingleFamily) as Occ_PermanentDwellingSingleFamily
+,sum(Occ_PermanentDwellingMultiFamily) as Occ_PermanentDwellingMultiFamily
+,sum(Occ_TemporaryLodging) as Occ_TemporaryLodging
+,sum(Occ_GroupInstitutionalHousing) as Occ_GroupInstitutionalHousing
+,sum(Occ_Apartment_Condo) as Occ_Apartment_Condo
+,sum(Occ_TerracedHousing) as Occ_TerracedHousing
+,sum(Occ_GeneralCommercial) as Occ_GeneralCommercial
+,sum(Occ_RetailTrade) as Occ_RetailTrade
+,sum(Occ_WholesaleTrade) as Occ_WholesaleTrade
+,sum(Occ_PersonalAndRepairServices) as Occ_PersonalAndRepairServices
+,sum(Occ_ProfessionalTechnicalAndBusinessServices) as Occ_ProfessionalTechnicalAndBusinessServices
+,sum(Occ_HealthCareServices) as Occ_HealthCareServices
+,sum(Occ_EntertainmentAndRecreation) as Occ_EntertainmentAndRecreation
+,sum(Occ_Parking) as Occ_Parking
+,sum(Occ_GolfCourses) as Occ_GolfCourses
+,sum(Occ_GeneralIndustrial) as Occ_GeneralIndustrial
+,sum(Occ_HeavyFabricationAndAssembly) as Occ_HeavyFabricationAndAssembly
+,sum(Occ_LightFabricationAndAssembly) as Occ_LightFabricationAndAssembly
+,sum(Occ_FoodAndDrugProcessing) as Occ_FoodAndDrugProcessing
+,sum(Occ_ChemicalProcessing) as Occ_ChemicalProcessing
+,sum(Occ_MetalAndMineralsProcessing) as Occ_MetalAndMineralsProcessing
+,sum(Occ_HighTechnology) as Occ_HighTechnology
+,sum(Occ_Construction) as Occ_Construction
+,sum(Occ_Petroleum) as Occ_Petroleum
+,sum(Occ_Mining) as Occ_Mining
+,sum(Occ_Restaurants) as Occ_Restaurants
+,sum(Occ_GasolineStations) as Occ_GasolineStations
+,sum(Occ_AutomotiveRepairServicesAndCarwashes) as Occ_AutomotiveRepairServicesAndCarwashes
+,sum(Occ_ReligionAndNonprofit) as Occ_ReligionAndNonprofit
+,sum(Occ_Churches) as Occ_Churches
+,sum(Occ_GeneralServices) as Occ_GeneralServices
+,sum(Occ_EmergencyServices) as Occ_EmergencyServices
+,sum(Occ_UniversitiesCollegesTechSchools) as Occ_UniversitiesCollegesTechSchools
+,sum(Occ_PrimaryAndSecondarySchools) as Occ_PrimaryAndSecondarySchools
+,sum(Occ_Highway) as Occ_Highway
+,sum(Occ_Railroad) as Occ_Railroad
+,sum(Occ_Air) as Occ_Air
+,sum(Occ_SeaAndInlandWaterways) as Occ_SeaAndInlandWaterways
+,sum(Occ_AircraftHangars) as Occ_AircraftHangars
+,sum(Occ_Electrical) as Occ_Electrical
+,sum(Occ_Water) as Occ_Water
+,sum(Occ_SanitarySewer) as Occ_SanitarySewer
+,sum(Occ_NaturalGas) as Occ_NaturalGas
+,sum(Occ_TelephoneAndTelegraph) as Occ_TelephoneAndTelegraph
+,sum(Occ_Communication) as Occ_Communication
+,sum(Occ_FloodControl) as Occ_FloodControl
+,sum(Occ_Agriculture) as Occ_Agriculture
+,sum(Occ_IndustrialFacilityUnknown) as Occ_IndustrialFacilityUnknown
+,sum(Occ_HeavyFabricationAndAssemblyGeneral) as Occ_HeavyFabricationAndAssemblyGeneral
+,sum(Occ_AutomotiveManufacturing) as Occ_AutomotiveManufacturing
+,sum(Occ_FabricatedMetalProducts) as Occ_FabricatedMetalProducts
+,sum(Occ_IndustrialAndCommercialMachineryAndEquipment) as Occ_IndustrialAndCommercialMachineryAndEquipment
+,sum(Occ_TransportationEquipmentAssembly) as Occ_TransportationEquipmentAssembly
+,sum(Occ_PulpPaperAndAlliedProductsManufacturing) as Occ_PulpPaperAndAlliedProductsManufacturing
+,sum(Occ_TextileMillProducts) as Occ_TextileMillProducts
+,sum(Occ_LumberAndWoodProductsExceptFurniture) as Occ_LumberAndWoodProductsExceptFurniture
+,sum(Occ_StoneClayGlassCeramicsProducts) as Occ_StoneClayGlassCeramicsProducts
+,sum(Occ_LightFabricationAndAssemblyGeneral) as Occ_LightFabricationAndAssemblyGeneral
+,sum(Occ_FurnitureAndFixtures) as Occ_FurnitureAndFixtures
+,sum(Occ_ApparelAndFinishedProductsFromFabrics) as Occ_ApparelAndFinishedProductsFromFabrics
+,sum(Occ_PrintPublishingAndAlliedIndustries) as Occ_PrintPublishingAndAlliedIndustries
+,sum(Occ_RubberAndMiscellaneousPlasticsProducts) as Occ_RubberAndMiscellaneousPlasticsProducts
+,sum(Occ_LeatherAndLeatherProducts) as Occ_LeatherAndLeatherProducts
+,sum(Occ_ElectronicAndOtherElectricalEquipExceptComputers) as Occ_ElectronicAndOtherElectricalEquipExceptComputers
+,sum(Occ_MeasuringAnalyzingAndControllingInstruments) as Occ_MeasuringAnalyzingAndControllingInstruments
+,sum(Occ_PhotographicMedicalAndOpticalGoods) as Occ_PhotographicMedicalAndOpticalGoods
+,sum(Occ_WatchesAndClocks) as Occ_WatchesAndClocks
+,sum(Occ_MiscellaneousManufacturingIndustries) as Occ_MiscellaneousManufacturingIndustries
+,sum(Occ_TireManufacturers) as Occ_TireManufacturers
+,sum(Occ_FoodAndDrugProcessingGeneral) as Occ_FoodAndDrugProcessingGeneral
+,sum(Occ_FoodAndKindredProducts) as Occ_FoodAndKindredProducts
+,sum(Occ_TobaccoProducts) as Occ_TobaccoProducts
+,sum(Occ_PharmaceuticalPlants) as Occ_PharmaceuticalPlants
+,sum(Occ_BiologicalProductsExceptDiagnostic) as Occ_BiologicalProductsExceptDiagnostic
+,sum(Occ_Wineries) as Occ_Wineries
+,sum(Occ_ChemicalProcessingGeneral) as Occ_ChemicalProcessingGeneral
+,sum(Occ_ChlorinePlants) as Occ_ChlorinePlants
+,sum(Occ_VinylPlants) as Occ_VinylPlants
+,sum(Occ_LightHydrocarbonOrAromaticsPlant) as Occ_LightHydrocarbonOrAromaticsPlant
+,sum(Occ_PlasticsPlants) as Occ_PlasticsPlants
+,sum(Occ_ChlorhydrinPlants) as Occ_ChlorhydrinPlants
+,sum(Occ_FertilizerPlants) as Occ_FertilizerPlants
+,sum(Occ_CementPlantsCementMills) as Occ_CementPlantsCementMills
+,sum(Occ_OtherChemicalAndAlliedProducts) as Occ_OtherChemicalAndAlliedProducts
+,sum(Occ_MetalAndMineralsProcessingGeneral) as Occ_MetalAndMineralsProcessingGeneral
+,sum(Occ_PrimaryMetalIndustry) as Occ_PrimaryMetalIndustry
+,sum(Occ_SteelMills) as Occ_SteelMills
+,sum(Occ_Smelters) as Occ_Smelters
+,sum(Occ_HighTechnologyGeneral) as Occ_HighTechnologyGeneral
+,sum(Occ_SemiConductorAndRelatedDevices) as Occ_SemiConductorAndRelatedDevices
+,sum(Occ_ElectronicComputerDevices) as Occ_ElectronicComputerDevices
+,sum(Occ_ComputerStorageDevices) as Occ_ComputerStorageDevices
+,sum(Occ_ElectronTubes) as Occ_ElectronTubes
+,sum(Occ_PrintedCircuitBoards) as Occ_PrintedCircuitBoards
+,sum(Occ_GeneralBuildingConstructionContractors) as Occ_GeneralBuildingConstructionContractors
+,sum(Occ_HeavyConstructions) as Occ_HeavyConstructions
+,sum(Occ_SpecialTradeContractors) as Occ_SpecialTradeContractors
+,sum(Occ_MiningGeneral) as Occ_MiningGeneral
+,sum(Occ_MiningOperations) as Occ_MiningOperations
+,sum(Occ_MetalMining) as Occ_MetalMining
+,sum(Occ_CoalMining) as Occ_CoalMining
+,sum(Occ_MiningQuarryingNonMetallicMineralExceptFuels) as Occ_MiningQuarryingNonMetallicMineralExceptFuels
+,sum(Occ_OilRefinerySystemsGeneral) as Occ_OilRefinerySystemsGeneral
+,sum(Occ_HydroElectricPowerSystemsGeneral) as Occ_HydroElectricPowerSystemsGeneral
+,sum(Occ_ThermoElectricPowerSystemsGeneral) as Occ_ThermoElectricPowerSystemsGeneral
+,sum(Occ_ElectricSubstation) as Occ_ElectricSubstation
+,sum(Occ_PotableWaterSystemsGeneral) as Occ_PotableWaterSystemsGeneral
+,sum(Occ_WasteWaterTreatmentSystemsGeneral) as Occ_WasteWaterTreatmentSystemsGeneral
+,sum(Occ_GasProcessingSystemsGeneral) as Occ_GasProcessingSystemsGeneral
+INTO OccCategories_Prev_",projName
+," FROM ",dataTableRawUnstackedPrev,"
+--WHERE peril_cd in ('HU')
+GROUP BY left(FIPS_StateAndCounty,2)
+,left(Business,2)
+,substring(Business,3,1)
+,peril_cd
+",sep="")
+
+sqlQuery(connection, queryOccPrev)
+@
+
+<<name="ConstructionClassesCurrent",echo=FALSE,quiet=TRUE,results=hide>>=
+queryConBldgCur = paste("select
+left(FIPS_StateAndCounty,2) as StateCode
+,left(Business,2) as Business
+,substring(Business,3,1) as FinancialDivision
+,peril_cd
+--,sum(cast(RiskCount as float)) as RiskCount
+,sum(ConBldg_Unknown) as ConBldg_Unknown
+,sum(ConBldg_WoodFrame) as ConBldg_WoodFrame
+,sum(ConBldg_LightWoodFrame) as ConBldg_LightWoodFrame
+,sum(ConBldg_WoodMasonryVeneer) as ConBldg_WoodMasonryVeneer
+,sum(ConBldg_HeavyTimber) as ConBldg_HeavyTimber
+,sum(ConBldg_WoodOkabe) as ConBldg_WoodOkabe
+,sum(ConBldg_WoodShinkabe) as ConBldg_WoodShinkabe
+,sum(ConBldg_Masonry) as ConBldg_Masonry
+,sum(ConBldg_MasonryAdobe) as ConBldg_MasonryAdobe
+,sum(ConBldg_RubbleStoneMasonry) as ConBldg_RubbleStoneMasonry
+,sum(ConBldg_UnreinforcedMasonry_BearingWall) as ConBldg_UnreinforcedMasonry_BearingWall
+,sum(ConBldg_UnreinforcedMasonry_BearingFrame) as ConBldg_UnreinforcedMasonry_BearingFrame
+,sum(ConBldg_ReinforcedMasonry) as ConBldg_ReinforcedMasonry
+,sum(ConBldg_ReinforcedMasonryShearWallWithMRF) as ConBldg_ReinforcedMasonryShearWallWithMRF
+,sum(ConBldg_ReinforcedMasonryShearWallWithoutMRF) as ConBldg_ReinforcedMasonryShearWallWithoutMRF
+,sum(ConBldg_JoistedMasonry) as ConBldg_JoistedMasonry
+,sum(ConBldg_ReinforcedConcrete) as ConBldg_ReinforcedConcrete
+,sum(ConBldg_ReinforcedConcreteShearWallWithMRF) as ConBldg_ReinforcedConcreteShearWallWithMRF
+,sum(ConBldg_ReinforcedConcreteShearWallWithoutMRF) as ConBldg_ReinforcedConcreteShearWallWithoutMRF
+,sum(ConBldg_ReinforcedConcreteMRFDuctile) as ConBldg_ReinforcedConcreteMRFDuctile
+,sum(ConBldg_ReinforcedConcreteMRFNonDuctile) as ConBldg_ReinforcedConcreteMRFNonDuctile
+,sum(ConBldg_ConcreteTiltUp) as ConBldg_ConcreteTiltUp
+,sum(ConBldg_PrecastConcrete) as ConBldg_PrecastConcrete
+,sum(ConBldg_PrecastConcreteWithShearWall) as ConBldg_PrecastConcreteWithShearWall
+,sum(ConBldg_ReinforcedConcreteMRF) as ConBldg_ReinforcedConcreteMRF
+,sum(ConBldg_ReinforcedConcreteMRFWithURM) as ConBldg_ReinforcedConcreteMRFWithURM
+,sum(ConBldg_Steel) as ConBldg_Steel
+,sum(ConBldg_SteelLightMetal) as ConBldg_SteelLightMetal
+,sum(ConBldg_SteelBracedSteelFrame) as ConBldg_SteelBracedSteelFrame
+,sum(ConBldg_SteelmrfPerimeter) as ConBldg_SteelmrfPerimeter
+,sum(ConBldg_SteelmrfDistributed) as ConBldg_SteelmrfDistributed
+,sum(ConBldg_SpecialLongSpan) as ConBldg_SpecialLongSpan
+,sum(ConBldg_SpecialSemiWindResistive) as ConBldg_SpecialSemiWindResistive
+,sum(ConBldg_WindResistive) as ConBldg_WindResistive
+,sum(ConBldg_UnknownGlass) as ConBldg_UnknownGlass
+,sum(ConBldg_SafetyGlass) as ConBldg_SafetyGlass
+,sum(ConBldg_ImpactResistantGlass) as ConBldg_ImpactResistantGlass
+,sum(ConBldg_MobileHomes) as ConBldg_MobileHomes
+,sum(ConBldg_MobileHomesNoTieDown) as ConBldg_MobileHomesNoTieDown
+,sum(ConBldg_MobileHomesPartTieDown) as ConBldg_MobileHomesPartTieDown
+,sum(ConBldg_MobileHomesFullTieDown) as ConBldg_MobileHomesFullTieDown
+,sum(ConBldg_Railroads) as ConBldg_Railroads
+,sum(ConBldg_Highways) as ConBldg_Highways
+,sum(ConBldg_Runways) as ConBldg_Runways
+,sum(ConBldg_ConcreteDams) as ConBldg_ConcreteDams
+,sum(ConBldg_EarthFillDams) as ConBldg_EarthFillDams
+,sum(ConBldg_AlluviumTunnels) as ConBldg_AlluviumTunnels
+,sum(ConBldg_RockTunnels) as ConBldg_RockTunnels
+,sum(ConBldg_CutAndCoverTunnels) as ConBldg_CutAndCoverTunnels
+,sum(ConBldg_UndergroundLiquidTanks) as ConBldg_UndergroundLiquidTanks
+,sum(ConBldg_UndergroundSolidTanks) as ConBldg_UndergroundSolidTanks
+,sum(ConBldg_OnGroundLiquidTanks) as ConBldg_OnGroundLiquidTanks
+,sum(ConBldg_OnGroundSolidTanks) as ConBldg_OnGroundSolidTanks
+,sum(ConBldg_ElevatedLiquidTanks) as ConBldg_ElevatedLiquidTanks
+,sum(ConBldg_ElevatedSolidTanks) as ConBldg_ElevatedSolidTanks
+,sum(ConBldg_UndergroundPipelines) as ConBldg_UndergroundPipelines
+,sum(ConBldg_AtGradePipelines) as ConBldg_AtGradePipelines
+,sum(ConBldg_MasonryChimneys) as ConBldg_MasonryChimneys
+,sum(ConBldg_ConcreteChimneys) as ConBldg_ConcreteChimneys
+,sum(ConBldg_SteelChimneys) as ConBldg_SteelChimneys
+,sum(ConBldg_ElectricalTransmissionConventionalTowers) as ConBldg_ElectricalTransmissionConventionalTowers
+,sum(ConBldg_ElectricalTransmissionMajorTowers) as ConBldg_ElectricalTransmissionMajorTowers
+,sum(ConBldg_BroadcastTowers) as ConBldg_BroadcastTowers
+,sum(ConBldg_ObservationTowers) as ConBldg_ObservationTowers
+,sum(ConBldg_OffshoreTowers) as ConBldg_OffshoreTowers
+,sum(ConBldg_ResidentialEquipment) as ConBldg_ResidentialEquipment
+,sum(ConBldg_OfficeEquipment) as ConBldg_OfficeEquipment
+,sum(ConBldg_ElectricalEquipment) as ConBldg_ElectricalEquipment
+,sum(ConBldg_MechanicalEquipment) as ConBldg_MechanicalEquipment
+,sum(ConBldg_HighTechnologyEquipment) as ConBldg_HighTechnologyEquipment
+,sum(ConBldg_TrainsTrucksAirplanesEtc) as ConBldg_TrainsTrucksAirplanesEtc
+,sum(ConBldg_PumpingStations) as ConBldg_PumpingStations
+,sum(ConBldg_CompressorStations) as ConBldg_CompressorStations
+,sum(ConBldg_Cranes) as ConBldg_Cranes
+,sum(ConBldg_ConveyorSystems) as ConBldg_ConveyorSystems
+,sum(ConBldg_Canals) as ConBldg_Canals
+,sum(ConBldg_EarthRetainingStructures) as ConBldg_EarthRetainingStructures
+,sum(ConBldg_WaterfrontStructures) as ConBldg_WaterfrontStructures
+,sum(ConBldg_OffshoreStructures) as ConBldg_OffshoreStructures
+,sum(ConBldg_Automobiles) as ConBldg_Automobiles
+INTO ConBldgCategories_Cur_",projName
+," FROM ",dataTableRawUnstackedCur,"
+GROUP BY left(FIPS_StateAndCounty,2)
+,left(Business,2)
+,substring(Business,3,1)
+,peril_cd
+",sep="")
+
+sqlQuery(connection,queryConBldgCur)
+@
+
+<<name="OccupancyClassesCurrent",echo=FALSE,quiet=TRUE,results=hide>>=
+queryOccCur = paste("select
+left(FIPS_StateAndCounty,2) as StateCode
+,left(Business,2) as Business
+,substring(Business,3,1) as FinancialDivision
+,peril_cd
+--,sum(cast(RiskCount as float)) as RiskCount
+,sum(Occ_Unknown) as Occ_Unknown
+,sum(Occ_GeneralResidential) as Occ_GeneralResidential
+,sum(Occ_PermanentDwellingSingleFamily) as Occ_PermanentDwellingSingleFamily
+,sum(Occ_PermanentDwellingMultiFamily) as Occ_PermanentDwellingMultiFamily
+,sum(Occ_TemporaryLodging) as Occ_TemporaryLodging
+,sum(Occ_GroupInstitutionalHousing) as Occ_GroupInstitutionalHousing
+,sum(Occ_Apartment_Condo) as Occ_Apartment_Condo
+,sum(Occ_TerracedHousing) as Occ_TerracedHousing
+,sum(Occ_GeneralCommercial) as Occ_GeneralCommercial
+,sum(Occ_RetailTrade) as Occ_RetailTrade
+,sum(Occ_WholesaleTrade) as Occ_WholesaleTrade
+,sum(Occ_PersonalAndRepairServices) as Occ_PersonalAndRepairServices
+,sum(Occ_ProfessionalTechnicalAndBusinessServices) as Occ_ProfessionalTechnicalAndBusinessServices
+,sum(Occ_HealthCareServices) as Occ_HealthCareServices
+,sum(Occ_EntertainmentAndRecreation) as Occ_EntertainmentAndRecreation
+,sum(Occ_Parking) as Occ_Parking
+,sum(Occ_GolfCourses) as Occ_GolfCourses
+,sum(Occ_GeneralIndustrial) as Occ_GeneralIndustrial
+,sum(Occ_HeavyFabricationAndAssembly) as Occ_HeavyFabricationAndAssembly
+,sum(Occ_LightFabricationAndAssembly) as Occ_LightFabricationAndAssembly
+,sum(Occ_FoodAndDrugProcessing) as Occ_FoodAndDrugProcessing
+,sum(Occ_ChemicalProcessing) as Occ_ChemicalProcessing
+,sum(Occ_MetalAndMineralsProcessing) as Occ_MetalAndMineralsProcessing
+,sum(Occ_HighTechnology) as Occ_HighTechnology
+,sum(Occ_Construction) as Occ_Construction
+,sum(Occ_Petroleum) as Occ_Petroleum
+,sum(Occ_Mining) as Occ_Mining
+,sum(Occ_Restaurants) as Occ_Restaurants
+,sum(Occ_GasolineStations) as Occ_GasolineStations
+,sum(Occ_AutomotiveRepairServicesAndCarwashes) as Occ_AutomotiveRepairServicesAndCarwashes
+,sum(Occ_ReligionAndNonprofit) as Occ_ReligionAndNonprofit
+,sum(Occ_Churches) as Occ_Churches
+,sum(Occ_GeneralServices) as Occ_GeneralServices
+,sum(Occ_EmergencyServices) as Occ_EmergencyServices
+,sum(Occ_UniversitiesCollegesTechSchools) as Occ_UniversitiesCollegesTechSchools
+,sum(Occ_PrimaryAndSecondarySchools) as Occ_PrimaryAndSecondarySchools
+,sum(Occ_Highway) as Occ_Highway
+,sum(Occ_Railroad) as Occ_Railroad
+,sum(Occ_Air) as Occ_Air
+,sum(Occ_SeaAndInlandWaterways) as Occ_SeaAndInlandWaterways
+,sum(Occ_AircraftHangars) as Occ_AircraftHangars
+,sum(Occ_Electrical) as Occ_Electrical
+,sum(Occ_Water) as Occ_Water
+,sum(Occ_SanitarySewer) as Occ_SanitarySewer
+,sum(Occ_NaturalGas) as Occ_NaturalGas
+,sum(Occ_TelephoneAndTelegraph) as Occ_TelephoneAndTelegraph
+,sum(Occ_Communication) as Occ_Communication
+,sum(Occ_FloodControl) as Occ_FloodControl
+,sum(Occ_Agriculture) as Occ_Agriculture
+,sum(Occ_IndustrialFacilityUnknown) as Occ_IndustrialFacilityUnknown
+,sum(Occ_HeavyFabricationAndAssemblyGeneral) as Occ_HeavyFabricationAndAssemblyGeneral
+,sum(Occ_AutomotiveManufacturing) as Occ_AutomotiveManufacturing
+,sum(Occ_FabricatedMetalProducts) as Occ_FabricatedMetalProducts
+,sum(Occ_IndustrialAndCommercialMachineryAndEquipment) as Occ_IndustrialAndCommercialMachineryAndEquipment
+,sum(Occ_TransportationEquipmentAssembly) as Occ_TransportationEquipmentAssembly
+,sum(Occ_PulpPaperAndAlliedProductsManufacturing) as Occ_PulpPaperAndAlliedProductsManufacturing
+,sum(Occ_TextileMillProducts) as Occ_TextileMillProducts
+,sum(Occ_LumberAndWoodProductsExceptFurniture) as Occ_LumberAndWoodProductsExceptFurniture
+,sum(Occ_StoneClayGlassCeramicsProducts) as Occ_StoneClayGlassCeramicsProducts
+,sum(Occ_LightFabricationAndAssemblyGeneral) as Occ_LightFabricationAndAssemblyGeneral
+,sum(Occ_FurnitureAndFixtures) as Occ_FurnitureAndFixtures
+,sum(Occ_ApparelAndFinishedProductsFromFabrics) as Occ_ApparelAndFinishedProductsFromFabrics
+,sum(Occ_PrintPublishingAndAlliedIndustries) as Occ_PrintPublishingAndAlliedIndustries
+,sum(Occ_RubberAndMiscellaneousPlasticsProducts) as Occ_RubberAndMiscellaneousPlasticsProducts
+,sum(Occ_LeatherAndLeatherProducts) as Occ_LeatherAndLeatherProducts
+,sum(Occ_ElectronicAndOtherElectricalEquipExceptComputers) as Occ_ElectronicAndOtherElectricalEquipExceptComputers
+,sum(Occ_MeasuringAnalyzingAndControllingInstruments) as Occ_MeasuringAnalyzingAndControllingInstruments
+,sum(Occ_PhotographicMedicalAndOpticalGoods) as Occ_PhotographicMedicalAndOpticalGoods
+,sum(Occ_WatchesAndClocks) as Occ_WatchesAndClocks
+,sum(Occ_MiscellaneousManufacturingIndustries) as Occ_MiscellaneousManufacturingIndustries
+,sum(Occ_TireManufacturers) as Occ_TireManufacturers
+,sum(Occ_FoodAndDrugProcessingGeneral) as Occ_FoodAndDrugProcessingGeneral
+,sum(Occ_FoodAndKindredProducts) as Occ_FoodAndKindredProducts
+,sum(Occ_TobaccoProducts) as Occ_TobaccoProducts
+,sum(Occ_PharmaceuticalPlants) as Occ_PharmaceuticalPlants
+,sum(Occ_BiologicalProductsExceptDiagnostic) as Occ_BiologicalProductsExceptDiagnostic
+,sum(Occ_Wineries) as Occ_Wineries
+,sum(Occ_ChemicalProcessingGeneral) as Occ_ChemicalProcessingGeneral
+,sum(Occ_ChlorinePlants) as Occ_ChlorinePlants
+,sum(Occ_VinylPlants) as Occ_VinylPlants
+,sum(Occ_LightHydrocarbonOrAromaticsPlant) as Occ_LightHydrocarbonOrAromaticsPlant
+,sum(Occ_PlasticsPlants) as Occ_PlasticsPlants
+,sum(Occ_ChlorhydrinPlants) as Occ_ChlorhydrinPlants
+,sum(Occ_FertilizerPlants) as Occ_FertilizerPlants
+,sum(Occ_CementPlantsCementMills) as Occ_CementPlantsCementMills
+,sum(Occ_OtherChemicalAndAlliedProducts) as Occ_OtherChemicalAndAlliedProducts
+,sum(Occ_MetalAndMineralsProcessingGeneral) as Occ_MetalAndMineralsProcessingGeneral
+,sum(Occ_PrimaryMetalIndustry) as Occ_PrimaryMetalIndustry
+,sum(Occ_SteelMills) as Occ_SteelMills
+,sum(Occ_Smelters) as Occ_Smelters
+,sum(Occ_HighTechnologyGeneral) as Occ_HighTechnologyGeneral
+,sum(Occ_SemiConductorAndRelatedDevices) as Occ_SemiConductorAndRelatedDevices
+,sum(Occ_ElectronicComputerDevices) as Occ_ElectronicComputerDevices
+,sum(Occ_ComputerStorageDevices) as Occ_ComputerStorageDevices
+,sum(Occ_ElectronTubes) as Occ_ElectronTubes
+,sum(Occ_PrintedCircuitBoards) as Occ_PrintedCircuitBoards
+,sum(Occ_GeneralBuildingConstructionContractors) as Occ_GeneralBuildingConstructionContractors
+,sum(Occ_HeavyConstructions) as Occ_HeavyConstructions
+,sum(Occ_SpecialTradeContractors) as Occ_SpecialTradeContractors
+,sum(Occ_MiningGeneral) as Occ_MiningGeneral
+,sum(Occ_MiningOperations) as Occ_MiningOperations
+,sum(Occ_MetalMining) as Occ_MetalMining
+,sum(Occ_CoalMining) as Occ_CoalMining
+,sum(Occ_MiningQuarryingNonMetallicMineralExceptFuels) as Occ_MiningQuarryingNonMetallicMineralExceptFuels
+,sum(Occ_OilRefinerySystemsGeneral) as Occ_OilRefinerySystemsGeneral
+,sum(Occ_HydroElectricPowerSystemsGeneral) as Occ_HydroElectricPowerSystemsGeneral
+,sum(Occ_ThermoElectricPowerSystemsGeneral) as Occ_ThermoElectricPowerSystemsGeneral
+,sum(Occ_ElectricSubstation) as Occ_ElectricSubstation
+,sum(Occ_PotableWaterSystemsGeneral) as Occ_PotableWaterSystemsGeneral
+,sum(Occ_WasteWaterTreatmentSystemsGeneral) as Occ_WasteWaterTreatmentSystemsGeneral
+,sum(Occ_GasProcessingSystemsGeneral) as Occ_GasProcessingSystemsGeneral
+INTO OccCategories_Cur_",projName
+," FROM ",dataTableRawUnstackedCur,"
+GROUP BY left(FIPS_StateAndCounty,2)
+,left(Business,2)
+,substring(Business,3,1)
+,peril_cd
+",sep="")
+
+sqlQuery(connection, queryOccCur)
+@
+
+\section{Building Construction}
+
+\subsection{Outlier Detection}
+
+<<name="LaTeXConstructionClassOutlierTables",echo=FALSE,quiet=TRUE,results=tex>>=
+# store and merge construction classes for previous and current periods
+conBldgCategoriesPrevTbl = sqlQuery(connection,paste("SELECT * FROM ConBldgCategories_Prev_",projName,sep=""))
+conBldgCategoriesCurTbl = sqlQuery(connection,paste("SELECT * FROM ConBldgCategories_Cur_",projName,sep=""))
+
+attributeNames = colnames(conBldgCategoriesPrevTbl)
+attributeNamesUnderScore = attributeNames[c(-1,-2,-3,-4)]
+attributeNames = gsub(pattern="_",replacement=" ",attributeNamesUnderScore)
+
+allPrimaryTbl = merge(conBldgCategoriesPrevTbl,conBldgCategoriesCurTbl,all=TRUE,by=c("StateCode","Business","FinancialDivision","peril_cd"),sort=TRUE,suffixes=c("_Prev","_Cur"),incomparables=0)
+
+#riskCountDiff = allPrimaryTbl$RiskCount_Cur - allPrimaryTbl$RiskCount_Prev
+#riskCountDiff = cbind(allPrimaryTbl[,1:4],riskCountDiff)
+
+allPrimaryTblNoNAs = apply(allPrimaryTbl[,c(-1,-2,-3,-4)],2,NaAdjust)
+allPrimaryTbl = cbind(allPrimaryTbl[,1:4],allPrimaryTblNoNAs)
+
+# Add text labels for states
+queryStateLabels = paste("SELECT
+*
+FROM pml_common.dbo.state_decode
+")
+
+stateLabels = sqlQuery(connection,queryStateLabels)
+
+allPrimaryTbl = sqldf("SELECT
+state_cd_txt
+,a.*
+FROM allPrimaryTbl a
+LEFT JOIN stateLabels b
+ON StateCode = fips_st
+")
+
+beginVar1 = 5
+beginVar2 = ((length(allPrimaryTbl[1,]) - 4) / 2) + 5
+n = (length(allPrimaryTbl[1,]) - 5) / 2
+allPrimaryTblColNames = colnames(allPrimaryTbl[,c(-1,-2,-3,-4,-5)])
+primaryPerilLvls = levels(as.factor(allPrimaryTbl[,"peril_cd"]))
+perilLength = length(primaryPerilLvls)
+primaryBusLvls = levels(as.factor(allPrimaryTbl[,"Business"]))
+busLength = length(primaryBusLvls)
+primaryDivLvls = levels(as.factor(allPrimaryTbl[,"FinancialDivision"]))
+divLength = length(primaryDivLvls)
+
+emptyPrevPeriod = NA
+emptyCurPeriod = NA
+p = 1
+q = 1
+
+#allPrimaryTbl[1,]
+#i=2;j=5;k=2;m=3 #WoodframePPEQE
+#i=2;j=2;k=2;m=17 #ConBldg_JoistedMasonryCPEQE"
+#i=4;j=2;k=4;m=2 #HUCPI-WoodFrame
+#i=2;j=2;k=2;m=2 #no zeros
+#i=2;j=2;k=2;m=18 #one column of zeros
+#i=4;j=5;k=2;m=18 #all zeros
+#first loop goes through each column, which represents the attributes
+for(m in 1:n){
+for(i in 1:perilLength){
+    perilIndex = which(allPrimaryTbl$peril_cd == primaryPerilLvls[i])
+    primaryYoYPeril = allPrimaryTbl[perilIndex,]
+    riskCountDiffYoYPeril = riskCountDiff[perilIndex,]
+    for(j in 1:busLength){
+        busIndex = which(primaryYoYPeril$Business == primaryBusLvls[j])
+        if(length(allPrimaryTbl[busIndex,1]) > 0) {
+            primaryYoYBusiness = primaryYoYPeril[busIndex,]
+            riskCountDiffYoYBusiness = riskCountDiffYoYPeril[busIndex,]
+            for(k in 1:divLength){
+                divisionIndex = which(primaryYoYBusiness$FinancialDivision == primaryDivLvls[k])
+                if(length(primaryYoYBusiness[divisionIndex,1]) > 0) {
+                        tbl = (primaryYoYBusiness[divisionIndex,])
+                        riskCountDiffTbl = riskCountDiffYoYBusiness[divisionIndex,]
+                        attributeNamePrev = allPrimaryTblColNames[m]
+                        attributeNameCur = allPrimaryTblColNames[floor(m+n)]
+                        prev = NaAdjust(tbl[,beginVar1+m])
+                        cur = NaAdjust(tbl[,beginVar2+m])
+                        x = NaAdjust(riskCountDiffTbl[,5])
+                        y = NaAdjust(tbl[,beginVar2+m]) - NaAdjust(tbl[,beginVar1+m])
+                        x2 = tbl[,beginVar1+m]
+                        y2 = tbl[,beginVar2+m]
+                        perc = format(NaAdjust(((cur / prev) - 1) * 100),digits=c(2))
+                        test = 0
+
+                        sumTest = try(sum(prev,cur),TRUE)
+                        sumTestX = try(sum(prev),TRUE)
+                        sumTestY = try(sum(cur),TRUE)
+
+#                        print(paste("CHECK: ",attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],sep=""))
+
+                        #isolate cases where previous is zeros, but cur is not
+                        if(sumTestX == 0 && sumTestY > 0){
+                            if(is.na(emptyPrevPeriod)){
+                                AttributeNm = attributeNames[m]
+                                tbl2 = cbind(AttributeNm,tbl)
+                                emptyPrevPeriod = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep="")); break}
+                            else if(!is.na(emptyPrevPeriod[1,1])){
+                                    AttributeNm = attributeNames[m]
+                                    tbl2 = cbind(AttributeNm,tbl)
+                                    temp = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep=""))}
+                                    emptyPrevPeriod = rbind(emptyPrevPeriod,temp)
+                        }
+
+                        #isolate cases where current is zeros, but prev is not
+                        if(sumTestY == 0 && sumTestX > 0){
+                            if(is.na(emptyCurPeriod)){
+                                AttributeNm = attributeNames[m]
+                                tbl2 = cbind(AttributeNm,tbl)
+                                emptyCurPeriod = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep="")); break}
+                            else if(!is.na(emptyCurPeriod[1,1])){
+                                    AttributeNm = attributeNames[m]
+                                    tbl2 = cbind(AttributeNm,tbl)
+                                    temp = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep=""))}
+                                    emptyCurPeriod = rbind(emptyCurPeriod,temp)
+                        }
+
+                        #only continue if all column sums are greater than zero
+                        if(sumTestX > 0 && sumTestY > 0 && !is.character(sumTest)){
+                            notZerosIndx = which(abs(y) > 0)
+                            x = x[notZerosIndx]
+                            y = y[notZerosIndx]
+                            x2 = format(x2[notZerosIndx],big.mark=",")
+                            y2 = format(y2[notZerosIndx],big.mark=",")
+                            perc = format(perc[notZerosIndx],digits=2)
+                            states = as.vector(tbl$state_cd_txt[notZerosIndx])
+                            tableData = data.frame(cbind(states,y2,x2,perc))
+
+                            x = rank(x)
+                            y = rank(y)
+
+                            colnames(tableData) <- c("State",currentPeriodName,previousPeriodName,"Percent_Change")
+
+#                            if(cor.test(x,y)$p.value > sigCutoff){"Outlier"} else {"No correlated (i.e., systematic) problems"}
+
+                            outliers = try(outlierTest(lm(y~x),cutoff=0.05,n.max=Inf))
+                            outlierIndices = as.numeric(attr(outliers[[1]],"names"))
+                            outlierRanks = c(x[outlierIndices],y[outlierIndices])
+                            outlierTbl = tableData[outlierIndices,]
+                            outlierPerc = max(perc[outlierIndices])
+                            rankFilterTest = max(outlierRanks)
+
+                            if(length(outlierIndices) > 0
+                               && !is.na(outliers$bonf.p[[1]])
+                               && outliers$bonf.p[[1]] < sigCutoff
+                               && rankFilterTest > rankCutoff
+                               && as.numeric(outlierPerc) > percChgCutoff
+                               && try(cor.test(x,y)$p.value) > correlSigCutoff){
+
+                                    cat("\\begin{frame}[shrink=5]\n")
+                                    cat("\\frametitle{",attributeNames[m],", Bus. Line: ",primaryBusLvls[j],", Peril: ",primaryPerilLvls[i],", Division: ",primaryDivLvls[k],"}\n",sep="")
+
+                                    #Make LaTeX Table
+                                    LaTeXtable = xtable(format(outlierTbl,big.mark=",",scientific=FALSE,digits=2),label=paste(attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],sep=""),digits=c(0,0,0,0,2),align="rlrrr")
+                                    print(LaTeXtable,table.placement="tbp",size="\\tiny",big.mark=",",include.rownames=FALSE)
+
+                                    #Make outlier scatterplot
+                                    row.names(tableData) <- as.vector(tableData$State)
+                                    tableData = tableData[,-1]
+
+                                    pdf(paste(figureOutput,attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],".pdf",sep=""))
+                                    try(scatterplot(x,y,xlab="Ranking of Overall Risk Count Growth",ylab=paste(attributeNames[m]," Ranking of Risk Count Change",sep=""),id.n=10,labels=row.names(tableData),boxplots=FALSE,smooth=FALSE,spread=FALSE),silent=FALSE)
+                                    dev.off()
+
+                                    cat("\\begin{figure}\n")
+                                    cat("\\centering\n")
+                                    cat("\\includegraphics[width=.60\\textwidth]{",figureOutput,attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],".pdf}\n",sep="")
+                                    cat("\\caption{Year-over-year scatter plot comparison of ",attributeNames[m],"}\n",sep="")
+                                    cat("\\label{fig:",attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],"}\n",sep="")
+                                    cat("\\end{figure}\n")
+                                    cat("\\end{frame}\n\n")
+
+#                                    print(paste("CHECK: ",attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],sep=""))
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+if(!is.na(emptyPrevPeriod)){
+    write.csv(emptyPrevPeriod,paste(excelOutput,"PrimaryCharEmptyPrevPeriod.csv",sep=""))
+    if(length(emptyPrevPeriod[,1]) < 30){
+        cat("\n\\subsection{Building Construction with Empty Previous Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Building Construction with Values Currently, and No Values Previously}\n")
+        LaTeXtable = xtable(emptyPrevPeriod
+            ,caption=paste("Data is now appearing in these combinations where there was none previously. Totals are overall risk counts.")
+            ,label="PrimaryRiskEmptyPrev",digits=c(0,0,0,0,0,0,0))
+            print(LaTeXtable,table.placement="tbp",size="\\tiny")
+        cat("\\end{frame}\n\n")
+    }
+    if(length(emptyPrevPeriod[,1]) >= 30){
+        cat("\n\\subsection{Building Construction with Empty Previous Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Building Construction with Values Currently, and No Values Previously}\n")
+        cat("There are too many instances to include in a slide. The results were automatically exported to Excel for further review.\n")
+        cat("\\end{frame}\n\n")
+    }
+}
+
+if(!is.na(emptyCurPeriod)){
+    write.csv(emptyCurPeriod,paste(excelOutput,"PrimaryCharEmptyCurPeriod.csv",sep=""))
+    if(length(emptyCurPeriod[,1]) < 30){
+        cat("\n\\subsection{Building Construction with Empty Current Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Building Construction with No Values Currently, and Values Previously}\n")
+        LaTeXtable = xtable(emptyCurPeriod
+            ,caption=paste("No data is appearing in these combinations where there used to be data previously. Totals are overall risk counts.")
+            ,label="PrimaryRiskEmptyCur",digits=c(0,0,0,0,0,0,0))
+            print(LaTeXtable,table.placement="tbp",size="\\tiny")
+        cat("\\end{frame}\n\n")
+    }
+    if(length(emptyCurPeriod[,1]) >= 30){
+        cat("\n\\subsection{Building Construction with Empty Current Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Building Construction with No Values Currently, and Values Previously}\n")
+        cat("There are too many instances to include in a slide. The results were automatically exported to Excel for further review.\n")
+        cat("\\end{frame}\n\n")
+    }
+}
+@
+
+\section{Occupancy}
+
+\subsection{Outlier Detection}
+
+<<name="LaTeXOccupancyClassOutlierTables",echo=FALSE,quiet=TRUE,results=tex>>=
+occCategoriesPrevTbl = sqlQuery(connection,paste("SELECT * FROM OccCategories_Prev_",projName,sep=""))
+occCategoriesCurTbl = sqlQuery(connection,paste("SELECT * FROM OccCategories_Cur_",projName,sep=""))
+
+attributeNames = colnames(occCategoriesPrevTbl)
+attributeNamesUnderScore = attributeNames[c(-1,-2,-3,-4)]
+attributeNames = gsub(pattern="_",replacement=" ",attributeNamesUnderScore)
+
+allPrimaryTbl = merge(occCategoriesPrevTbl,occCategoriesCurTbl,all=TRUE,by=c("StateCode","Business","FinancialDivision","peril_cd"),sort=TRUE,suffixes=c("_Prev","_Cur"),incomparables=0)
+
+#riskCountDiff = allPrimaryTbl$RiskCount_Cur - allPrimaryTbl$RiskCount_Prev
+#riskCountDiff = cbind(allPrimaryTbl[,1:4],riskCountDiff)
+
+allPrimaryTblNoNAs = apply(allPrimaryTbl[,c(-1,-2,-3,-4)],2,NaAdjust)
+allPrimaryTbl = cbind(allPrimaryTbl[,1:4],allPrimaryTblNoNAs)
+
+# Add text labels for states
+queryStateLabels = paste("SELECT
+*
+FROM pml_common.dbo.state_decode
+")
+
+stateLabels = sqlQuery(connection,queryStateLabels)
+
+allPrimaryTbl = sqldf("SELECT
+state_cd_txt
+,a.*
+FROM allPrimaryTbl a
+LEFT JOIN stateLabels b
+ON StateCode = fips_st
+")
+
+beginVar1 = 5
+beginVar2 = ((length(allPrimaryTbl[1,]) - 4) / 2) + 5
+n = (length(allPrimaryTbl[1,]) - 5) / 2
+allPrimaryTblColNames = colnames(allPrimaryTbl[,c(-1,-2,-3,-4,-5)])
+primaryPerilLvls = levels(as.factor(allPrimaryTbl[,"peril_cd"]))
+perilLength = length(primaryPerilLvls)
+primaryBusLvls = levels(as.factor(allPrimaryTbl[,"Business"]))
+busLength = length(primaryBusLvls)
+primaryDivLvls = levels(as.factor(allPrimaryTbl[,"FinancialDivision"]))
+divLength = length(primaryDivLvls)
+
+emptyPrevPeriod = NA
+emptyCurPeriod = NA
+p = 1
+q = 1
+
+#i=2;j=2;k=4;m=2  #EQ,CP,I,Occ_Unknown
+#i=4;j=2;k=4;m=2 #Occ_Unknown
+#i=2;j=2;k=2;m=18
+#i=4;j=5;k=2;m=18
+#i=2;j=1;k=4;m=18
+#first loop goes through each column, which represents the attributes
+for(m in 1:n){
+for(i in 1:perilLength){
+    perilIndex = which(allPrimaryTbl$peril_cd == primaryPerilLvls[i])
+    primaryYoYPeril = allPrimaryTbl[perilIndex,]
+    riskCountDiffYoYPeril = riskCountDiff[perilIndex,]
+    for(j in 1:busLength){
+        busIndex = which(primaryYoYPeril$Business == primaryBusLvls[j])
+        if(length(allPrimaryTbl[busIndex,1]) > 0) {
+            primaryYoYBusiness = primaryYoYPeril[busIndex,]
+            riskCountDiffYoYBusiness = riskCountDiffYoYPeril[busIndex,]
+            for(k in 1:divLength){
+                divisionIndex = which(primaryYoYBusiness$FinancialDivision == primaryDivLvls[k])
+                if(length(primaryYoYBusiness[divisionIndex,1]) > 0) {
+                        tbl = (primaryYoYBusiness[divisionIndex,])
+                        riskCountDiffTbl = riskCountDiffYoYBusiness[divisionIndex,]
+                        attributeNamePrev = allPrimaryTblColNames[m]
+                        attributeNameCur = allPrimaryTblColNames[floor(m+n)]
+                        prev = NaAdjust(tbl[,beginVar1+m])
+                        cur = NaAdjust(tbl[,beginVar2+m])
+                        x = NaAdjust(riskCountDiffTbl[,5])
+                        y = NaAdjust(tbl[,beginVar2+m]) - NaAdjust(tbl[,beginVar1+m])
+                        x2 = tbl[,beginVar1+m]
+                        y2 = tbl[,beginVar2+m]
+                        perc = format(NaAdjust(((cur / prev) - 1) * 100),digits=c(2))
+                        test = 0
+
+                        sumTest = try(sum(prev,cur),TRUE)
+                        sumTestX = try(sum(prev),TRUE)
+                        sumTestY = try(sum(cur),TRUE)
+
+#                        print(paste("CHECK: ",attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],sep=""))
+
+                        #isolate cases where previous is zeros, but cur is not
+                        if(sumTestX == 0 && sumTestY > 0){
+                            if(is.na(emptyPrevPeriod)){
+                                AttributeNm = attributeNames[m]
+                                tbl2 = cbind(AttributeNm,tbl)
+                                emptyPrevPeriod = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep="")); break}
+                            else if(!is.na(emptyPrevPeriod[1,1])){
+                                    AttributeNm = attributeNames[m]
+                                    tbl2 = cbind(AttributeNm,tbl)
+                                    temp = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep=""))}
+                                    emptyPrevPeriod = rbind(emptyPrevPeriod,temp)
+                        }
+
+                        #isolate cases where current is zeros, but prev is not
+                        if(sumTestY == 0 && sumTestX > 0){
+                            if(is.na(emptyCurPeriod)){
+                                AttributeNm = attributeNames[m]
+                                tbl2 = cbind(AttributeNm,tbl)
+                                emptyCurPeriod = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep="")); break}
+                            else if(!is.na(emptyCurPeriod[1,1])){
+                                    AttributeNm = attributeNames[m]
+                                    tbl2 = cbind(AttributeNm,tbl)
+                                    temp = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep=""))}
+                                    emptyCurPeriod = rbind(emptyCurPeriod,temp)
+                        }
+
+                        #only continue if all column sums are greater than zero
+                        if(sumTestX > 0 && sumTestY > 0 && !is.character(sumTest)){
+                            notZerosIndx = which(abs(y) > 0)
+                            x = x[notZerosIndx]
+                            y = y[notZerosIndx]
+                            x2 = format(x2[notZerosIndx],big.mark=",")
+                            y2 = format(y2[notZerosIndx],big.mark=",")
+                            perc = format(perc[notZerosIndx],digits=2)
+                            states = as.vector(tbl$state_cd_txt[notZerosIndx])
+                            tableData = data.frame(cbind(states,y2,x2,perc))
+
+                            x = rank(x)
+                            y = rank(y)
+
+                            colnames(tableData) <- c("State",currentPeriodName,previousPeriodName,"Percent_Change")
+
+#                            if(cor.test(x,y)$p.value > sigCutoff){"Outlier"} else {"No correlated (i.e., systematic) problems"}
+
+                            outliers = try(outlierTest(lm(y~x),cutoff=0.05,n.max=Inf))
+                            outlierIndices = as.numeric(attr(outliers[[1]],"names"))
+                            outlierRanks = c(x[outlierIndices],y[outlierIndices])
+                            outlierTbl = tableData[outlierIndices,]
+                            outlierPerc = max(perc[outlierIndices])
+                            rankFilterTest = max(outlierRanks)
+
+                            if(length(outlierIndices) > 0
+                               && !is.na(outliers$bonf.p[[1]])
+                               && outliers$bonf.p[[1]] < sigCutoff
+                               && rankFilterTest > rankCutoff
+                               && as.numeric(outlierPerc) > percChgCutoff
+                               && try(cor.test(x,y)$p.value) > correlSigCutoff){
+
+                                    cat("\\begin{frame}[shrink=5]\n")
+                                    cat("\\frametitle{",attributeNames[m],", Bus. Line: ",primaryBusLvls[j],", Peril: ",primaryPerilLvls[i],", Division: ",primaryDivLvls[k],"}\n",sep="")
+
+                                    #Make LaTeX Table
+                                    LaTeXtable = xtable(format(outlierTbl,big.mark=",",scientific=FALSE,digits=2),label=paste(attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],sep=""),digits=c(0,0,0,0,2),align="rlrrr")
+                                    print(LaTeXtable,table.placement="tbp",size="\\tiny",big.mark=",",include.rownames=FALSE)
+
+                                    #Make outlier scatterplot
+                                    row.names(tableData) <- as.vector(tableData$State)
+                                    tableData = tableData[,-1]
+
+                                    pdf(paste(figureOutput,attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],".pdf",sep=""))
+                                    try(scatterplot(x,y,xlab="Ranking of Overall Risk Count Growth",ylab=paste(attributeNames[m]," Ranking of Risk Count Change",sep=""),id.n=10,labels=row.names(tableData),boxplots=FALSE,smooth=FALSE,spread=FALSE),silent=FALSE)
+                                    dev.off()
+
+                                    cat("\\begin{figure}\n")
+                                    cat("\\centering\n")
+                                    cat("\\includegraphics[width=.60\\textwidth]{",figureOutput,attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],".pdf}\n",sep="")
+                                    cat("\\caption{Year-over-year scatter plot comparison of ",attributeNames[m],"}\n",sep="")
+                                    cat("\\label{fig:",attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],"}\n",sep="")
+                                    cat("\\end{figure}\n")
+                                    cat("\\end{frame}\n\n")
+
+#                                    print(paste("CHECK: ",attributeNamesUnderScore[m],primaryBusLvls[j],primaryPerilLvls[i],primaryDivLvls[k],sep=""))
+
+                                }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+if(!is.na(emptyPrevPeriod)){
+    write.csv(emptyPrevPeriod,paste(excelOutput,"OccupancyCharEmptyPrevPeriod.csv",sep=""))
+    if(length(emptyPrevPeriod[,1]) < 30){
+        cat("\n\\subsection{Occupancy Classes Empty Previous Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Occupancy Classes with Values Currently, and No Values Previously}\n")
+        LaTeXtable = xtable(emptyPrevPeriod
+            ,caption=paste("Data is now appearing in these combinations where there was none previously. Totals are overall risk counts.")
+            ,label="OccupancyEmptyPrev",digits=c(0,0,0,0,0,0,0))
+            print(LaTeXtable,table.placement="tbp",size="\\tiny")
+        cat("\\end{frame}\n\n")
+    }
+    if(length(emptyPrevPeriod[,1]) >= 30){
+        cat("\n\\subsection{Occupancy Classes Empty Previous Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Occupancy Classes with Values Currently, and No Values Previously}\n")
+        cat("There are too many instances to include in a slide. The results were automatically exported to Excel for further review.\n")
+        cat("\\end{frame}\n\n")
+    }
+}
+
+if(!is.na(emptyCurPeriod)){
+    write.csv(emptyCurPeriod,paste(excelOutput,"OccupancyCharEmptyCurPeriod.csv",sep=""))
+    if(length(emptyCurPeriod[,1]) < 30){
+        cat("\n\\subsection{Occupancy Classes Empty Current Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Occupancy Classes with No Values Currently, and Values Previously}\n")
+        LaTeXtable = xtable(emptyCurPeriod
+            ,caption=paste("No data is appearing in these combinations where there used to be data previously. Totals are overall risk counts.")
+            ,label="OccupancyEmptyCur",digits=c(0,0,0,0,0,0,0))
+            print(LaTeXtable,table.placement="tbp",size="\\tiny")
+        cat("\\end{frame}\n\n")
+    }
+    if(length(emptyCurPeriod[,1]) >= 30){
+        cat("\n\\subsection{Occupancy Classes Empty Current Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Occupancy Classes with No Values Currently, and Values Previously}\n")
+        cat("There are too many instances to include in a slide. The results were automatically exported to Excel for further review.\n")
+        cat("\\end{frame}\n\n")
+    }
+}
+@
+
+\section{Secondary Characteristics}
+
+\subsection{Outlier Detection}
+
+<<name="SecondaryCharacteristicsPrev",echo=FALSE,quiet=TRUE,results=hide>>=
+querySecondaryPrev = paste("select
+left(FIPS_StateAndCounty,2) as StateCode
+,left(Business,2) as Business
+,substring(Business,3,1) as FinancialDivision
+,peril_cd
+--,sum(cast(RiskCount as float)) as RiskCount
+,sum(SealApprov_Unknown) as SealApprov_Unknown
+,sum(SealApprov_FullyEngineeredStructure) as SealApprov_FullyEngineeredStructure
+,sum(SealApprov_PariallyEngineeredStructure) as SealApprov_PariallyEngineeredStructure
+,sum(SealApprov_MinimallyEngineeredStructure) as SealApprov_MinimallyEngineeredStructure
+,sum(cast(FloorOfInterest as float)) as FloorOfInterest
+,sum(BuildCond_Unknown) as BuildCond_Unknown
+,sum(BuildCond_Average) as BuildCond_Average
+,sum(BuildCond_Good) as BuildCond_Good
+,sum(BuildCond_Poor) as BuildCond_Poor
+,sum(Pounding_Unknown) as Pounding_Unknown
+,sum(Pounding_QuarterMeterOrLess) as Pounding_QuarterMeterOrLess
+,sum(Pounding_QuarterToHalfMeter) as Pounding_QuarterToHalfMeter
+,sum(Pounding_HalfToOneMeter) as Pounding_HalfToOneMeter
+,sum(Pounding_OneMeterToTwoMeters) as Pounding_OneMeterToTwoMeters
+,sum(Pounding_GreaterThanTwoMeters) as Pounding_GreaterThanTwoMeters
+,sum(TreeExposure_Unknown) as TreeExposure_Unknown
+,sum(TreeExposure_No) as TreeExposure_No
+,sum(TreeExposure_Yes) as TreeExposure_Yes
+,sum(SmallDebris_Unknown) as SmallDebris_Unknown
+,sum(SmallDebris_No) as SmallDebris_No
+,sum(SmallDebris_Yes) as SmallDebris_Yes
+,sum(LargeMissile_Unknown) as LargeMissile_Unknown
+,sum(LargeMissile_No) as LargeMissile_No
+,sum(LargeMissile_Yes) as LargeMissile_Yes
+,sum(TerrainRoughness_Unknown) as TerrainRoughness_Unknown
+,sum(TerrainRoughness_TypeA) as TerrainRoughness_TypeA
+,sum(TerrainRoughness_TypeB) as TerrainRoughness_TypeB
+,sum(TerrainRoughness_TypeC) as TerrainRoughness_TypeC
+,sum(TerrainRoughness_TypeD) as TerrainRoughness_TypeD
+,sum(cast(AdBldHeight as float)) as AdBldHeight
+--,sum(BldOrientation) as BldOrientation --not supported as of UPX version 13.0
+,sum(Shape_Unknown) as Shape_Unknown
+,sum(Shape_Square) as Shape_Square
+,sum(Shape_Rectangle) as Shape_Rectangle
+,sum(Shape_Circular) as Shape_Circular
+,sum(Shape_LShaped) as Shape_LShaped
+,sum(Shape_UShaped) as Shape_UShaped
+,sum(Shape_TShaped) as Shape_TShaped
+,sum(Shape_HShaped) as Shape_HShaped
+,sum(Shape_Complex) as Shape_Complex
+,sum(Torsion_Unknown) as Torsion_Unknown
+,sum(Torsion_Symmetric) as Torsion_Symmetric
+,sum(Torsion_Asymmetric) as Torsion_Asymmetric
+,sum(Torsion_CornerBuilding) as Torsion_CornerBuilding
+,sum(SoftStory_Unknown) as SoftStory_Unknown
+,sum(SoftStory_Yes) as SoftStory_Yes
+,sum(SoftStory_No) as SoftStory_No
+,sum(StrucIrreg_Unknown) as StrucIrreg_Unknown
+,sum(StrucIrreg_Regular) as StrucIrreg_Regular
+,sum(StrucIrreg_VerticalOffset) as StrucIrreg_VerticalOffset
+,sum(StrucIrreg_NonUniformFloorArea) as StrucIrreg_NonUniformFloorArea
+,sum(StrucIrreg_DiscontinuousShearWall) as StrucIrreg_DiscontinuousShearWall
+,sum(StrucIrreg_HeavyFloor) as StrucIrreg_HeavyFloor
+,sum(Special_Unknown) as Special_Unknown
+,sum(Special_BaseIsolation) as Special_BaseIsolation
+,sum(Special_ViscoElasticDampers) as Special_ViscoElasticDampers
+,sum(Special_OtherEnergyDissipaters) as Special_OtherEnergyDissipaters
+,sum(Retrofit_Unknown) as Retrofit_Unknown
+,sum(Retrofit_BracingOfCrippleWalls) as Retrofit_BracingOfCrippleWalls
+,sum(Retrofit_BracingOfParapets) as Retrofit_BracingOfParapets
+,sum(Retrofit_BracingOfSoftStory) as Retrofit_BracingOfSoftStory
+,sum(Retrofit_FoundationAnchorage) as Retrofit_FoundationAnchorage
+,sum(Retrofit_GlassAndWindowStrengthening) as Retrofit_GlassAndWindowStrengthening
+,sum(Retrofit_TiltUp) as Retrofit_TiltUp
+,sum(Retrofit_General) as Retrofit_General
+,sum(RoofGeometry_Unknown) as RoofGeometry_Unknown
+,sum(RoofGeometry_Flat) as RoofGeometry_Flat
+,sum(RoofGeometry_GableEndWithoutBracing) as RoofGeometry_GableEndWithoutBracing
+,sum(RoofGeometry_Hip) as RoofGeometry_Hip
+,sum(RoofGeometry_Complex) as RoofGeometry_Complex
+,sum(RoofGeometry_Stepped) as RoofGeometry_Stepped
+,sum(RoofGeometry_Shed) as RoofGeometry_Shed
+,sum(RoofGeometry_Mansard) as RoofGeometry_Mansard
+,sum(RoofGeometry_GableEndWithBracing) as RoofGeometry_GableEndWithBracing
+,sum(RoofGeometry_Pyramid) as RoofGeometry_Pyramid
+,sum(RoofGeometry_Grambrel) as RoofGeometry_Grambrel
+,sum(RoofPitch_Unknown) as RoofPitch_Unknown
+,sum(RoofPitch_Low) as RoofPitch_Low
+,sum(RoofPitch_Medium) as RoofPitch_Medium
+,sum(RoofPitch_High) as RoofPitch_High
+,sum(RoofCover_Unknown) as RoofCover_Unknown
+,sum(RoofCover_AsphaltShingles) as RoofCover_AsphaltShingles
+,sum(RoofCover_WoodenShingles) as RoofCover_WoodenShingles
+,sum(RoofCover_ClayOrConcreteTiles) as RoofCover_ClayOrConcreteTiles
+,sum(RoofCover_LightMetalPanels) as RoofCover_LightMetalPanels
+,sum(RoofCover_Slate) as RoofCover_Slate
+,sum(RoofCover_BuiltUpRoofWithGravel) as RoofCover_BuiltUpRoofWithGravel
+,sum(RoofCover_SinglePlyMembrane) as RoofCover_SinglePlyMembrane
+,sum(RoofCover_StandingSeamMetalRoofs) as RoofCover_StandingSeamMetalRoofs
+,sum(RoofCover_BuiltUpRoofWithoutGravel) as RoofCover_BuiltUpRoofWithoutGravel
+,sum(RoofCover_SinglePlyMembraneBallasted) as RoofCover_SinglePlyMembraneBallasted
+,sum(RoofCover_FloridaBuildingCodeEquivalent) as RoofCover_FloridaBuildingCodeEquivalent
+,sum(RoofDeck_Unknown) as RoofDeck_Unknown
+,sum(RoofDeck_Plywood) as RoofDeck_Plywood
+,sum(RoofDeck_WoodPlanks) as RoofDeck_WoodPlanks
+,sum(RoofDeck_ParticleBoardOSB) as RoofDeck_ParticleBoardOSB
+,sum(RoofDeck_MetalDeckWithInsulationBoard) as RoofDeck_MetalDeckWithInsulationBoard
+,sum(RoofDeck_MetalDeckWithConcrete) as RoofDeck_MetalDeckWithConcrete
+,sum(RoofDeck_PreCastConcreteSlabs) as RoofDeck_PreCastConcreteSlabs
+,sum(RoofDeck_ReinforcedConcreteSlabs) as RoofDeck_ReinforcedConcreteSlabs
+,sum(RoofDeck_LightMetal) as RoofDeck_LightMetal
+,sum(RoofCoverAttach_Unknown) as RoofCoverAttach_Unknown
+,sum(RoofCoverAttach_Screws) as RoofCoverAttach_Screws
+,sum(RoofCoverAttach_NailsOrStaples) as RoofCoverAttach_NailsOrStaples
+,sum(RoofCoverAttach_AdhesiveOrEpoxy) as RoofCoverAttach_AdhesiveOrEpoxy
+,sum(RoofCoverAttach_Mortar) as RoofCoverAttach_Mortar
+,sum(RoofDeckAttach_Unknown) as RoofDeckAttach_Unknown
+,sum(RoofDeckAttach_ScrewsOrBolts) as RoofDeckAttach_ScrewsOrBolts
+,sum(RoofDeckAttach_Nails) as RoofDeckAttach_Nails
+,sum(RoofDeckAttach_AdhesiveOrEpoxy) as RoofDeckAttach_AdhesiveOrEpoxy
+,sum(RoofDeckAttach_StructurallyConnected) as RoofDeckAttach_StructurallyConnected
+,sum(RoofDeckAttach_6dNails6InchSpacing12InchesOnCenter) as RoofDeckAttach_6dNails6InchSpacing12InchesOnCenter
+,sum(RoofDeckAttach_8dNails6InchSpacing12InchesOnCenter) as RoofDeckAttach_8dNails6InchSpacing12InchesOnCenter
+,sum(RoofDeckAttach_8dNails6InchSpacing6InchesOnCenter) as RoofDeckAttach_8dNails6InchSpacing6InchesOnCenter
+,sum(RoofAnchorage_Unknown) as RoofAnchorage_Unknown
+,sum(RoofAnchorage_HurricaneTies) as RoofAnchorage_HurricaneTies
+,sum(RoofAnchorage_NailsOrScrews) as RoofAnchorage_NailsOrScrews
+,sum(RoofAnchorage_AnchorBolts) as RoofAnchorage_AnchorBolts
+,sum(RoofAnchorage_GravityOrFriction) as RoofAnchorage_GravityOrFriction
+,sum(RoofAnchorage_AdhesiveEpoxy) as RoofAnchorage_AdhesiveEpoxy
+,sum(RoofAnchorage_StructurallyConnected) as RoofAnchorage_StructurallyConnected
+,sum(RoofAnchorage_Clips) as RoofAnchorage_Clips
+,sum(cast(RoofBuilt as float)) as RoofBuilt
+,sum(Wall_Unknown) as Wall_Unknown
+,sum(Wall_BrickOrUnreinforcedMasonry) as Wall_BrickOrUnreinforcedMasonry
+,sum(Wall_ReinforcedMasonry) as Wall_ReinforcedMasonry
+,sum(Wall_Plywood) as Wall_Plywood
+,sum(Wall_WoodPlanks) as Wall_WoodPlanks
+,sum(Wall_ParticleBoardOSB) as Wall_ParticleBoardOSB
+,sum(Wall_MetalPanels) as Wall_MetalPanels
+,sum(Wall_PreCastConcreteElements) as Wall_PreCastConcreteElements
+,sum(Wall_CastInPlaceConcrete) as Wall_CastInPlaceConcrete
+,sum(Wall_GypsumBoard) as Wall_GypsumBoard
+,sum(WallSiding_Unknown) as WallSiding_Unknown
+,sum(WallSiding_VeneerBrickOrMasonry) as WallSiding_VeneerBrickOrMasonry
+,sum(WallSiding_WoodShingles) as WallSiding_WoodShingles
+,sum(WallSiding_Clapboards) as WallSiding_Clapboards
+,sum(WallSiding_AluminumOrVinylSiding) as WallSiding_AluminumOrVinylSiding
+,sum(WallSiding_StonePanels) as WallSiding_StonePanels
+,sum(WallSiding_EIFS) as WallSiding_EIFS
+,sum(WallSiding_Stucco) as WallSiding_Stucco
+,sum(GlassType_Unknown) as GlassType_Unknown
+,sum(GlassType_Annealed) as GlassType_Annealed
+,sum(GlassType_Tempered) as GlassType_Tempered
+,sum(GlassType_HeatStrengthened) as GlassType_HeatStrengthened
+,sum(GlassType_Laminated) as GlassType_Laminated
+,sum(GlassType_InsulatingGlassUnits) as GlassType_InsulatingGlassUnits
+,sum(GlassPercent_Unknown) as GlassPercent_Unknown
+,sum(GlassPercent_LessThan5Percent) as GlassPercent_LessThan5Percent
+,sum(GlassPercent_Between5And20Percent) as GlassPercent_Between5And20Percent
+,sum(GlassPercent_Between20And60Percent) as GlassPercent_Between20And60Percent
+,sum(GlassPercent_GreaterThan60Percent) as GlassPercent_GreaterThan60Percent
+,sum(WindowProt_Unknown) as WindowProt_Unknown
+,sum(WindowProt_NoProtection) as WindowProt_NoProtection
+,sum(WindowProt_NonEngineeredShutters) as WindowProt_NonEngineeredShutters
+,sum(WindowProt_EngineeredShutters) as WindowProt_EngineeredShutters
+,sum(ExteriorDoors_Unknown) as ExteriorDoors_Unknown
+,sum(ExteriorDoors_SingleWidthDoors) as ExteriorDoors_SingleWidthDoors
+,sum(ExteriorDoors_DoubleWidthDoors) as ExteriorDoors_DoubleWidthDoors
+,sum(ExteriorDoors_ReinforcedSingleWidthDoors) as ExteriorDoors_ReinforcedSingleWidthDoors
+,sum(ExteriorDoors_ReinforcedDoubleWidthDoors) as ExteriorDoors_ReinforcedDoubleWidthDoors
+,sum(ExteriorDoors_SlidingDoors) as ExteriorDoors_SlidingDoors
+,sum(ExteriorDoors_ReinforcedSlidingDoors) as ExteriorDoors_ReinforcedSlidingDoors
+,sum(BldFndConn_Unknown) as BldFndConn_Unknown
+,sum(BldFndConn_HurricaneTies) as BldFndConn_HurricaneTies
+,sum(BldFndConn_NailsOrScrews) as BldFndConn_NailsOrScrews
+,sum(BldFndConn_AnchorBolts) as BldFndConn_AnchorBolts
+,sum(BldFndConn_GravityOrFriction) as BldFndConn_GravityOrFriction
+,sum(BldFndConn_AdhesiveOrEpoxy) as BldFndConn_AdhesiveOrEpoxy
+,sum(BldFndConn_StructurallyConnected) as BldFndConn_StructurallyConnected
+,sum(Foundation_Unknown) as Foundation_Unknown
+,sum(Foundation_MasonryBasement) as Foundation_MasonryBasement
+,sum(Foundation_ConcreteBasement) as Foundation_ConcreteBasement
+,sum(Foundation_MasonryWall) as Foundation_MasonryWall
+,sum(Foundation_CrawlSpaceAndCrippleWall) as Foundation_CrawlSpaceAndCrippleWall
+,sum(Foundation_CrawlSpaceAndMasonry) as Foundation_CrawlSpaceAndMasonry
+,sum(Foundation_PostAndPier) as Foundation_PostAndPier
+,sum(Foundation_Footing) as Foundation_Footing
+,sum(Foundation_MatAndSlab) as Foundation_MatAndSlab
+,sum(Foundation_Pile) as Foundation_Pile
+,sum(Foundation_NoBasement) as Foundation_NoBasement
+,sum(Foundation_EngineeringFoundation) as Foundation_EngineeringFoundation
+,sum(Foundation_CrawlspaceRaisedWood) as Foundation_CrawlspaceRaisedWood
+,sum(IntPartition_Unknown) as IntPartition_Unknown
+,sum(IntPartition_Wood) as IntPartition_Wood
+,sum(IntPartition_GypsumBoards) as IntPartition_GypsumBoards
+,sum(IntPartition_PlasteredMasonry) as IntPartition_PlasteredMasonry
+,sum(IntPartition_Brick) as IntPartition_Brick
+,sum(IntPartition_Other) as IntPartition_Other
+,sum(AttachStruct_Unknown) as AttachStruct_Unknown
+,sum(AttachStruct_CarportsOrCanopiesOrPorches) as AttachStruct_CarportsOrCanopiesOrPorches
+,sum(AttachStruct_SingleDoorGarages) as AttachStruct_SingleDoorGarages
+,sum(AttachStruct_DoubleDoorGarages) as AttachStruct_DoubleDoorGarages
+,sum(AttachStruct_ReinforcedSingleDoorGarages) as AttachStruct_ReinforcedSingleDoorGarages
+,sum(AttachStruct_ReinforcedDoubleDoorGarages) as AttachStruct_ReinforcedDoubleDoorGarages
+,sum(AttachStruct_ScreenedPorchesOrGlassPatioDoors) as AttachStruct_ScreenedPorchesOrGlassPatioDoors
+,sum(AttachStruct_Balcony) as AttachStruct_Balcony
+,sum(AttachStruct_NoAttachedWallStructures) as AttachStruct_NoAttachedWallStructures
+,sum(AppurtStruct_Unknown) as AppurtStruct_Unknown
+,sum(AppurtStruct_DetachedGarage) as AppurtStruct_DetachedGarage
+,sum(AppurtStruct_PoolEnclosures) as AppurtStruct_PoolEnclosures
+,sum(AppurtStruct_Shed) as AppurtStruct_Shed
+,sum(AppurtStruct_MasonryBoundaryWall) as AppurtStruct_MasonryBoundaryWall
+,sum(AppurtStruct_OtherFence) as AppurtStruct_OtherFence
+,sum(AppurtStruct_NoAppurtenantStructures) as AppurtStruct_NoAppurtenantStructures
+,sum(AppurtStruct_NoPoolEnclosures) as AppurtStruct_NoPoolEnclosures
+,sum(MechSystem_Unknown) as MechSystem_Unknown
+,sum(MechSystem_Chimneys) as MechSystem_Chimneys
+,sum(MechSystem_AirConditioningUnits) as MechSystem_AirConditioningUnits
+,sum(MechSystem_Skylights) as MechSystem_Skylights
+,sum(MechSystem_ParapetWalls) as MechSystem_ParapetWalls
+,sum(MechSystem_OverhangOrRake8To36Inches) as MechSystem_OverhangOrRake8To36Inches
+,sum(MechSystem_Dormers) as MechSystem_Dormers
+,sum(MechSystem_Other) as MechSystem_Other
+,sum(MechSystem_NoAttachedStructures) as MechSystem_NoAttachedStructures
+,sum(MechSystem_OverhangOrRakeLessThan8Inches) as MechSystem_OverhangOrRakeLessThan8Inches
+,sum(MechSystem_OverhangOrRakeGreaterThan36Inches) as MechSystem_OverhangOrRakeGreaterThan36Inches
+,sum(MechSystem_WaterProofMembraneOrFabric) as MechSystem_WaterProofMembraneOrFabric
+,sum(MechSystem_SecondaryWaterResistance) as MechSystem_SecondaryWaterResistance
+,sum(MechSystem_SecondaryWaterResistanceNo) as MechSystem_SecondaryWaterResistanceNo
+INTO SecondaryCategories_Prev_",projName
+," FROM ",dataTableRawUnstackedPrev,"
+GROUP BY left(FIPS_StateAndCounty,2)
+,left(Business,2)
+,substring(Business,3,1)
+,peril_cd
+",sep="")
+
+sqlQuery(connection, querySecondaryPrev)
+@
+
+<<name="SecondaryCharacteristicsCurrent",echo=FALSE,quiet=TRUE,results=hide>>=
+querySecondaryCur = paste("select
+left(FIPS_StateAndCounty,2) as StateCode
+,left(Business,2) as Business
+,substring(Business,3,1) as FinancialDivision
+,peril_cd
+--,sum(cast(RiskCount as float)) as RiskCount
+,sum(SealApprov_Unknown) as SealApprov_Unknown
+,sum(SealApprov_FullyEngineeredStructure) as SealApprov_FullyEngineeredStructure
+,sum(SealApprov_PariallyEngineeredStructure) as SealApprov_PariallyEngineeredStructure
+,sum(SealApprov_MinimallyEngineeredStructure) as SealApprov_MinimallyEngineeredStructure
+,sum(cast(FloorOfInterest as float)) as FloorOfInterest
+,sum(BuildCond_Unknown) as BuildCond_Unknown
+,sum(BuildCond_Average) as BuildCond_Average
+,sum(BuildCond_Good) as BuildCond_Good
+,sum(BuildCond_Poor) as BuildCond_Poor
+,sum(Pounding_Unknown) as Pounding_Unknown
+,sum(Pounding_QuarterMeterOrLess) as Pounding_QuarterMeterOrLess
+,sum(Pounding_QuarterToHalfMeter) as Pounding_QuarterToHalfMeter
+,sum(Pounding_HalfToOneMeter) as Pounding_HalfToOneMeter
+,sum(Pounding_OneMeterToTwoMeters) as Pounding_OneMeterToTwoMeters
+,sum(Pounding_GreaterThanTwoMeters) as Pounding_GreaterThanTwoMeters
+,sum(TreeExposure_Unknown) as TreeExposure_Unknown
+,sum(TreeExposure_No) as TreeExposure_No
+,sum(TreeExposure_Yes) as TreeExposure_Yes
+,sum(SmallDebris_Unknown) as SmallDebris_Unknown
+,sum(SmallDebris_No) as SmallDebris_No
+,sum(SmallDebris_Yes) as SmallDebris_Yes
+,sum(LargeMissile_Unknown) as LargeMissile_Unknown
+,sum(LargeMissile_No) as LargeMissile_No
+,sum(LargeMissile_Yes) as LargeMissile_Yes
+,sum(TerrainRoughness_Unknown) as TerrainRoughness_Unknown
+,sum(TerrainRoughness_TypeA) as TerrainRoughness_TypeA
+,sum(TerrainRoughness_TypeB) as TerrainRoughness_TypeB
+,sum(TerrainRoughness_TypeC) as TerrainRoughness_TypeC
+,sum(TerrainRoughness_TypeD) as TerrainRoughness_TypeD
+,sum(cast(AdBldHeight as float)) as AdBldHeight
+--,sum(BldOrientation) as BldOrientation --not supported as of UPX version 13.0
+,sum(Shape_Unknown) as Shape_Unknown
+,sum(Shape_Square) as Shape_Square
+,sum(Shape_Rectangle) as Shape_Rectangle
+,sum(Shape_Circular) as Shape_Circular
+,sum(Shape_LShaped) as Shape_LShaped
+,sum(Shape_UShaped) as Shape_UShaped
+,sum(Shape_TShaped) as Shape_TShaped
+,sum(Shape_HShaped) as Shape_HShaped
+,sum(Shape_Complex) as Shape_Complex
+,sum(Torsion_Unknown) as Torsion_Unknown
+,sum(Torsion_Symmetric) as Torsion_Symmetric
+,sum(Torsion_Asymmetric) as Torsion_Asymmetric
+,sum(Torsion_CornerBuilding) as Torsion_CornerBuilding
+,sum(SoftStory_Unknown) as SoftStory_Unknown
+,sum(SoftStory_Yes) as SoftStory_Yes
+,sum(SoftStory_No) as SoftStory_No
+,sum(StrucIrreg_Unknown) as StrucIrreg_Unknown
+,sum(StrucIrreg_Regular) as StrucIrreg_Regular
+,sum(StrucIrreg_VerticalOffset) as StrucIrreg_VerticalOffset
+,sum(StrucIrreg_NonUniformFloorArea) as StrucIrreg_NonUniformFloorArea
+,sum(StrucIrreg_DiscontinuousShearWall) as StrucIrreg_DiscontinuousShearWall
+,sum(StrucIrreg_HeavyFloor) as StrucIrreg_HeavyFloor
+,sum(Special_Unknown) as Special_Unknown
+,sum(Special_BaseIsolation) as Special_BaseIsolation
+,sum(Special_ViscoElasticDampers) as Special_ViscoElasticDampers
+,sum(Special_OtherEnergyDissipaters) as Special_OtherEnergyDissipaters
+,sum(Retrofit_Unknown) as Retrofit_Unknown
+,sum(Retrofit_BracingOfCrippleWalls) as Retrofit_BracingOfCrippleWalls
+,sum(Retrofit_BracingOfParapets) as Retrofit_BracingOfParapets
+,sum(Retrofit_BracingOfSoftStory) as Retrofit_BracingOfSoftStory
+,sum(Retrofit_FoundationAnchorage) as Retrofit_FoundationAnchorage
+,sum(Retrofit_GlassAndWindowStrengthening) as Retrofit_GlassAndWindowStrengthening
+,sum(Retrofit_TiltUp) as Retrofit_TiltUp
+,sum(Retrofit_General) as Retrofit_General
+,sum(RoofGeometry_Unknown) as RoofGeometry_Unknown
+,sum(RoofGeometry_Flat) as RoofGeometry_Flat
+,sum(RoofGeometry_GableEndWithoutBracing) as RoofGeometry_GableEndWithoutBracing
+,sum(RoofGeometry_Hip) as RoofGeometry_Hip
+,sum(RoofGeometry_Complex) as RoofGeometry_Complex
+,sum(RoofGeometry_Stepped) as RoofGeometry_Stepped
+,sum(RoofGeometry_Shed) as RoofGeometry_Shed
+,sum(RoofGeometry_Mansard) as RoofGeometry_Mansard
+,sum(RoofGeometry_GableEndWithBracing) as RoofGeometry_GableEndWithBracing
+,sum(RoofGeometry_Pyramid) as RoofGeometry_Pyramid
+,sum(RoofGeometry_Grambrel) as RoofGeometry_Grambrel
+,sum(RoofPitch_Unknown) as RoofPitch_Unknown
+,sum(RoofPitch_Low) as RoofPitch_Low
+,sum(RoofPitch_Medium) as RoofPitch_Medium
+,sum(RoofPitch_High) as RoofPitch_High
+,sum(RoofCover_Unknown) as RoofCover_Unknown
+,sum(RoofCover_AsphaltShingles) as RoofCover_AsphaltShingles
+,sum(RoofCover_WoodenShingles) as RoofCover_WoodenShingles
+,sum(RoofCover_ClayOrConcreteTiles) as RoofCover_ClayOrConcreteTiles
+,sum(RoofCover_LightMetalPanels) as RoofCover_LightMetalPanels
+,sum(RoofCover_Slate) as RoofCover_Slate
+,sum(RoofCover_BuiltUpRoofWithGravel) as RoofCover_BuiltUpRoofWithGravel
+,sum(RoofCover_SinglePlyMembrane) as RoofCover_SinglePlyMembrane
+,sum(RoofCover_StandingSeamMetalRoofs) as RoofCover_StandingSeamMetalRoofs
+,sum(RoofCover_BuiltUpRoofWithoutGravel) as RoofCover_BuiltUpRoofWithoutGravel
+,sum(RoofCover_SinglePlyMembraneBallasted) as RoofCover_SinglePlyMembraneBallasted
+,sum(RoofCover_FloridaBuildingCodeEquivalent) as RoofCover_FloridaBuildingCodeEquivalent
+,sum(RoofDeck_Unknown) as RoofDeck_Unknown
+,sum(RoofDeck_Plywood) as RoofDeck_Plywood
+,sum(RoofDeck_WoodPlanks) as RoofDeck_WoodPlanks
+,sum(RoofDeck_ParticleBoardOSB) as RoofDeck_ParticleBoardOSB
+,sum(RoofDeck_MetalDeckWithInsulationBoard) as RoofDeck_MetalDeckWithInsulationBoard
+,sum(RoofDeck_MetalDeckWithConcrete) as RoofDeck_MetalDeckWithConcrete
+,sum(RoofDeck_PreCastConcreteSlabs) as RoofDeck_PreCastConcreteSlabs
+,sum(RoofDeck_ReinforcedConcreteSlabs) as RoofDeck_ReinforcedConcreteSlabs
+,sum(RoofDeck_LightMetal) as RoofDeck_LightMetal
+,sum(RoofCoverAttach_Unknown) as RoofCoverAttach_Unknown
+,sum(RoofCoverAttach_Screws) as RoofCoverAttach_Screws
+,sum(RoofCoverAttach_NailsOrStaples) as RoofCoverAttach_NailsOrStaples
+,sum(RoofCoverAttach_AdhesiveOrEpoxy) as RoofCoverAttach_AdhesiveOrEpoxy
+,sum(RoofCoverAttach_Mortar) as RoofCoverAttach_Mortar
+,sum(RoofDeckAttach_Unknown) as RoofDeckAttach_Unknown
+,sum(RoofDeckAttach_ScrewsOrBolts) as RoofDeckAttach_ScrewsOrBolts
+,sum(RoofDeckAttach_Nails) as RoofDeckAttach_Nails
+,sum(RoofDeckAttach_AdhesiveOrEpoxy) as RoofDeckAttach_AdhesiveOrEpoxy
+,sum(RoofDeckAttach_StructurallyConnected) as RoofDeckAttach_StructurallyConnected
+,sum(RoofDeckAttach_6dNails6InchSpacing12InchesOnCenter) as RoofDeckAttach_6dNails6InchSpacing12InchesOnCenter
+,sum(RoofDeckAttach_8dNails6InchSpacing12InchesOnCenter) as RoofDeckAttach_8dNails6InchSpacing12InchesOnCenter
+,sum(RoofDeckAttach_8dNails6InchSpacing6InchesOnCenter) as RoofDeckAttach_8dNails6InchSpacing6InchesOnCenter
+,sum(RoofAnchorage_Unknown) as RoofAnchorage_Unknown
+,sum(RoofAnchorage_HurricaneTies) as RoofAnchorage_HurricaneTies
+,sum(RoofAnchorage_NailsOrScrews) as RoofAnchorage_NailsOrScrews
+,sum(RoofAnchorage_AnchorBolts) as RoofAnchorage_AnchorBolts
+,sum(RoofAnchorage_GravityOrFriction) as RoofAnchorage_GravityOrFriction
+,sum(RoofAnchorage_AdhesiveEpoxy) as RoofAnchorage_AdhesiveEpoxy
+,sum(RoofAnchorage_StructurallyConnected) as RoofAnchorage_StructurallyConnected
+,sum(RoofAnchorage_Clips) as RoofAnchorage_Clips
+,sum(cast(RoofBuilt as float)) as RoofBuilt
+,sum(Wall_Unknown) as Wall_Unknown
+,sum(Wall_BrickOrUnreinforcedMasonry) as Wall_BrickOrUnreinforcedMasonry
+,sum(Wall_ReinforcedMasonry) as Wall_ReinforcedMasonry
+,sum(Wall_Plywood) as Wall_Plywood
+,sum(Wall_WoodPlanks) as Wall_WoodPlanks
+,sum(Wall_ParticleBoardOSB) as Wall_ParticleBoardOSB
+,sum(Wall_MetalPanels) as Wall_MetalPanels
+,sum(Wall_PreCastConcreteElements) as Wall_PreCastConcreteElements
+,sum(Wall_CastInPlaceConcrete) as Wall_CastInPlaceConcrete
+,sum(Wall_GypsumBoard) as Wall_GypsumBoard
+,sum(WallSiding_Unknown) as WallSiding_Unknown
+,sum(WallSiding_VeneerBrickOrMasonry) as WallSiding_VeneerBrickOrMasonry
+,sum(WallSiding_WoodShingles) as WallSiding_WoodShingles
+,sum(WallSiding_Clapboards) as WallSiding_Clapboards
+,sum(WallSiding_AluminumOrVinylSiding) as WallSiding_AluminumOrVinylSiding
+,sum(WallSiding_StonePanels) as WallSiding_StonePanels
+,sum(WallSiding_EIFS) as WallSiding_EIFS
+,sum(WallSiding_Stucco) as WallSiding_Stucco
+,sum(GlassType_Unknown) as GlassType_Unknown
+,sum(GlassType_Annealed) as GlassType_Annealed
+,sum(GlassType_Tempered) as GlassType_Tempered
+,sum(GlassType_HeatStrengthened) as GlassType_HeatStrengthened
+,sum(GlassType_Laminated) as GlassType_Laminated
+,sum(GlassType_InsulatingGlassUnits) as GlassType_InsulatingGlassUnits
+,sum(GlassPercent_Unknown) as GlassPercent_Unknown
+,sum(GlassPercent_LessThan5Percent) as GlassPercent_LessThan5Percent
+,sum(GlassPercent_Between5And20Percent) as GlassPercent_Between5And20Percent
+,sum(GlassPercent_Between20And60Percent) as GlassPercent_Between20And60Percent
+,sum(GlassPercent_GreaterThan60Percent) as GlassPercent_GreaterThan60Percent
+,sum(WindowProt_Unknown) as WindowProt_Unknown
+,sum(WindowProt_NoProtection) as WindowProt_NoProtection
+,sum(WindowProt_NonEngineeredShutters) as WindowProt_NonEngineeredShutters
+,sum(WindowProt_EngineeredShutters) as WindowProt_EngineeredShutters
+,sum(ExteriorDoors_Unknown) as ExteriorDoors_Unknown
+,sum(ExteriorDoors_SingleWidthDoors) as ExteriorDoors_SingleWidthDoors
+,sum(ExteriorDoors_DoubleWidthDoors) as ExteriorDoors_DoubleWidthDoors
+,sum(ExteriorDoors_ReinforcedSingleWidthDoors) as ExteriorDoors_ReinforcedSingleWidthDoors
+,sum(ExteriorDoors_ReinforcedDoubleWidthDoors) as ExteriorDoors_ReinforcedDoubleWidthDoors
+,sum(ExteriorDoors_SlidingDoors) as ExteriorDoors_SlidingDoors
+,sum(ExteriorDoors_ReinforcedSlidingDoors) as ExteriorDoors_ReinforcedSlidingDoors
+,sum(BldFndConn_Unknown) as BldFndConn_Unknown
+,sum(BldFndConn_HurricaneTies) as BldFndConn_HurricaneTies
+,sum(BldFndConn_NailsOrScrews) as BldFndConn_NailsOrScrews
+,sum(BldFndConn_AnchorBolts) as BldFndConn_AnchorBolts
+,sum(BldFndConn_GravityOrFriction) as BldFndConn_GravityOrFriction
+,sum(BldFndConn_AdhesiveOrEpoxy) as BldFndConn_AdhesiveOrEpoxy
+,sum(BldFndConn_StructurallyConnected) as BldFndConn_StructurallyConnected
+,sum(Foundation_Unknown) as Foundation_Unknown
+,sum(Foundation_MasonryBasement) as Foundation_MasonryBasement
+,sum(Foundation_ConcreteBasement) as Foundation_ConcreteBasement
+,sum(Foundation_MasonryWall) as Foundation_MasonryWall
+,sum(Foundation_CrawlSpaceAndCrippleWall) as Foundation_CrawlSpaceAndCrippleWall
+,sum(Foundation_CrawlSpaceAndMasonry) as Foundation_CrawlSpaceAndMasonry
+,sum(Foundation_PostAndPier) as Foundation_PostAndPier
+,sum(Foundation_Footing) as Foundation_Footing
+,sum(Foundation_MatAndSlab) as Foundation_MatAndSlab
+,sum(Foundation_Pile) as Foundation_Pile
+,sum(Foundation_NoBasement) as Foundation_NoBasement
+,sum(Foundation_EngineeringFoundation) as Foundation_EngineeringFoundation
+,sum(Foundation_CrawlspaceRaisedWood) as Foundation_CrawlspaceRaisedWood
+,sum(IntPartition_Unknown) as IntPartition_Unknown
+,sum(IntPartition_Wood) as IntPartition_Wood
+,sum(IntPartition_GypsumBoards) as IntPartition_GypsumBoards
+,sum(IntPartition_PlasteredMasonry) as IntPartition_PlasteredMasonry
+,sum(IntPartition_Brick) as IntPartition_Brick
+,sum(IntPartition_Other) as IntPartition_Other
+,sum(AttachStruct_Unknown) as AttachStruct_Unknown
+,sum(AttachStruct_CarportsOrCanopiesOrPorches) as AttachStruct_CarportsOrCanopiesOrPorches
+,sum(AttachStruct_SingleDoorGarages) as AttachStruct_SingleDoorGarages
+,sum(AttachStruct_DoubleDoorGarages) as AttachStruct_DoubleDoorGarages
+,sum(AttachStruct_ReinforcedSingleDoorGarages) as AttachStruct_ReinforcedSingleDoorGarages
+,sum(AttachStruct_ReinforcedDoubleDoorGarages) as AttachStruct_ReinforcedDoubleDoorGarages
+,sum(AttachStruct_ScreenedPorchesOrGlassPatioDoors) as AttachStruct_ScreenedPorchesOrGlassPatioDoors
+,sum(AttachStruct_Balcony) as AttachStruct_Balcony
+,sum(AttachStruct_NoAttachedWallStructures) as AttachStruct_NoAttachedWallStructures
+,sum(AppurtStruct_Unknown) as AppurtStruct_Unknown
+,sum(AppurtStruct_DetachedGarage) as AppurtStruct_DetachedGarage
+,sum(AppurtStruct_PoolEnclosures) as AppurtStruct_PoolEnclosures
+,sum(AppurtStruct_Shed) as AppurtStruct_Shed
+,sum(AppurtStruct_MasonryBoundaryWall) as AppurtStruct_MasonryBoundaryWall
+,sum(AppurtStruct_OtherFence) as AppurtStruct_OtherFence
+,sum(AppurtStruct_NoAppurtenantStructures) as AppurtStruct_NoAppurtenantStructures
+,sum(AppurtStruct_NoPoolEnclosures) as AppurtStruct_NoPoolEnclosures
+,sum(MechSystem_Unknown) as MechSystem_Unknown
+,sum(MechSystem_Chimneys) as MechSystem_Chimneys
+,sum(MechSystem_AirConditioningUnits) as MechSystem_AirConditioningUnits
+,sum(MechSystem_Skylights) as MechSystem_Skylights
+,sum(MechSystem_ParapetWalls) as MechSystem_ParapetWalls
+,sum(MechSystem_OverhangOrRake8To36Inches) as MechSystem_OverhangOrRake8To36Inches
+,sum(MechSystem_Dormers) as MechSystem_Dormers
+,sum(MechSystem_Other) as MechSystem_Other
+,sum(MechSystem_NoAttachedStructures) as MechSystem_NoAttachedStructures
+,sum(MechSystem_OverhangOrRakeLessThan8Inches) as MechSystem_OverhangOrRakeLessThan8Inches
+,sum(MechSystem_OverhangOrRakeGreaterThan36Inches) as MechSystem_OverhangOrRakeGreaterThan36Inches
+,sum(MechSystem_WaterProofMembraneOrFabric) as MechSystem_WaterProofMembraneOrFabric
+,sum(MechSystem_SecondaryWaterResistance) as MechSystem_SecondaryWaterResistance
+,sum(MechSystem_SecondaryWaterResistanceNo) as MechSystem_SecondaryWaterResistanceNo
+INTO SecondaryCategories_Cur_",projName
+," FROM ",dataTableRawUnstackedCur,"
+GROUP BY left(FIPS_StateAndCounty,2)
+,left(Business,2)
+,substring(Business,3,1)
+,peril_cd
+",sep="")
+
+sqlQuery(connection, querySecondaryCur)
+@
+
+<<name="LaTeXSecondaryOutlierTables",echo=FALSE,quiet=TRUE,results=tex>>=
+# store and merge construction classes for previous and current periods
+secondaryCategoriesPrevTbl = sqlQuery(connection,paste("SELECT * FROM SecondaryCategories_Prev_",projName,sep=""))
+secondaryCategoriesCurTbl = sqlQuery(connection,paste("SELECT * FROM SecondaryCategories_Cur_",projName,sep=""))
+
+attributeNames = colnames(secondaryCategoriesPrevTbl)
+attributeNamesUnderScore = attributeNames[c(-1,-2,-3,-4)]
+attributeNames = gsub(pattern="_",replacement=" ",attributeNamesUnderScore)
+
+allSecondaryTbl = merge(secondaryCategoriesPrevTbl,secondaryCategoriesCurTbl,all=TRUE,by=c("StateCode","Business","FinancialDivision","peril_cd"),sort=TRUE,suffixes=c("_Prev","_Cur"),incomparables=0)
+
+#riskCountDiff = allSecondaryTbl$RiskCount_Cur - allSecondaryTbl$RiskCount_Prev
+#riskCountDiff = cbind(allSecondaryTbl[,1:4],riskCountDiff)
+
+allSecondaryTblNoNAs = apply(allSecondaryTbl[,c(-1,-2,-3,-4)],2,NaAdjust)
+allSecondaryTbl = cbind(allSecondaryTbl[,1:4],allSecondaryTblNoNAs)
+
+# Add text labels for states
+queryStateLabels = paste("SELECT
+*
+FROM pml_common.dbo.state_decode
+")
+
+stateLabels = sqlQuery(connection,queryStateLabels)
+
+allSecondaryTbl = sqldf("SELECT
+state_cd_txt
+,a.*
+FROM allSecondaryTbl a
+LEFT JOIN stateLabels b
+ON StateCode = fips_st
+")
+
+beginVar1 = 5
+beginVar2 = ((length(allSecondaryTbl[1,]) - 4) / 2) + 5
+n = (length(allSecondaryTbl[1,]) - 5) / 2
+allSecondaryTblColNames = colnames(allSecondaryTbl[,c(-1,-2,-3,-4,-5)])
+secondaryPerilLvls = levels(as.factor(allSecondaryTbl[,"peril_cd"]))
+perilLength = length(secondaryPerilLvls)
+secondaryBusLvls = levels(as.factor(allSecondaryTbl[,"Business"]))
+busLength = length(secondaryBusLvls)
+secondaryDivLvls = levels(as.factor(allSecondaryTbl[,"FinancialDivision"]))
+divLength = length(secondaryDivLvls)
+
+emptyPrevPeriod = NA
+emptyCurPeriod = NA
+
+p = 1
+q = 1
+
+#i=4;j=5;k=2;m=73 #roof gable with end bracing
+#i=4;j=5;k=2;m=93 #roof deck plywood
+#i=2;j=2;k=4;m=5 #all zeros
+#i=2;j=2;k=2;m=18
+#i=4;j=5;k=2;m=18
+#first loop goes through each column, which represents the attributes
+for(m in 1:n){
+for(i in 1:perilLength){
+    perilIndex = which(allSecondaryTbl$peril_cd == secondaryPerilLvls[i])
+    secondaryYoYPeril = allSecondaryTbl[perilIndex,]
+    riskCountDiffYoYPeril = riskCountDiff[perilIndex,]
+    for(j in 1:busLength){
+        busIndex = which(secondaryYoYPeril$Business == secondaryBusLvls[j])
+        if(length(allSecondaryTbl[busIndex,1]) > 0) {
+            secondaryYoYBusiness = secondaryYoYPeril[busIndex,]
+            riskCountDiffYoYBusiness = riskCountDiffYoYPeril[busIndex,]
+            for(k in 1:divLength){
+                divisionIndex = which(secondaryYoYBusiness$FinancialDivision == secondaryDivLvls[k])
+#                TestForUnknown = str_match(attributeNames[i], pattern="Unknown")
+#                if(TestForUnknown == NA){0} else {1}
+                if(length(secondaryYoYBusiness[divisionIndex,1]) > 0) {
+                        tbl = (secondaryYoYBusiness[divisionIndex,])
+                        riskCountDiffTbl = riskCountDiffYoYBusiness[divisionIndex,]
+                        attributeNamePrev = allSecondaryTblColNames[m]
+                        attributeNameCur = allSecondaryTblColNames[floor(m+n)]
+                        prev = NaAdjust(tbl[,beginVar1+m])
+                        cur = NaAdjust(tbl[,beginVar2+m])
+                        x = NaAdjust(riskCountDiffTbl[,5])
+                        y = NaAdjust(tbl[,beginVar2+m]) - NaAdjust(tbl[,beginVar1+m])
+                        x2 = tbl[,beginVar1+m]
+                        y2 = tbl[,beginVar2+m]
+                        perc = format(NaAdjust(((cur / prev) - 1) * 100),digits=c(2))
+                        test = 0
+
+                        sumTest = try(sum(prev,cur),TRUE)
+                        sumTestX = try(sum(prev),TRUE)
+                        sumTestY = try(sum(cur),TRUE)
+
+#                        print(paste("CHECK: ",attributeNamesUnderScore[m],secondaryBusLvls[j],secondaryPerilLvls[i],secondaryDivLvls[k],sep=""))
+
+                        #isolate cases where previous is zeros, but cur is not
+                        if(sumTestX == 0 && sumTestY > 0){
+                            if(is.na(emptyPrevPeriod)){
+                                AttributeNm = attributeNames[m]
+                                tbl2 = cbind(AttributeNm,tbl)
+                                emptyPrevPeriod = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep="")); break}
+                            else if(!is.na(emptyPrevPeriod[1,1])){
+                                    AttributeNm = attributeNames[m]
+                                    tbl2 = cbind(AttributeNm,tbl)
+                                    temp = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep=""))}
+                                    emptyPrevPeriod = rbind(emptyPrevPeriod,temp)
+                        }
+
+                        #isolate cases where current is zeros, but prev is not
+                        if(sumTestY == 0 && sumTestX > 0){
+                            if(is.na(emptyCurPeriod)){
+                                AttributeNm = attributeNames[m]
+                                tbl2 = cbind(AttributeNm,tbl)
+                                emptyCurPeriod = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep="")); break}
+                            else if(!is.na(emptyCurPeriod[1,1])){
+                                    AttributeNm = attributeNames[m]
+                                    tbl2 = cbind(AttributeNm,tbl)
+                                    temp = sqldf(paste("select AttributeNm as Attribute, sum(",attributeNameCur,") as ",currentPeriodName,", sum(",attributeNamePrev,") as ",previousPeriodName,", max(peril_cd) as Peril, max(Business) as Line, max(FinancialDivision) as Division from tbl2 group by AttributeNm, peril_cd, Business, FinancialDivision",sep=""))}
+                                    emptyCurPeriod = rbind(emptyCurPeriod,temp)
+                        }
+
+                        #only continue if all column sums are greater than zero
+                        if(sumTestX > 0 && sumTestY > 0 && !is.character(sumTest)){
+                            notZerosIndx = which(abs(y) > 0)
+                            x = x[notZerosIndx]
+                            y = y[notZerosIndx]
+                            x2 = format(x2[notZerosIndx],big.mark=",")
+                            y2 = format(y2[notZerosIndx],big.mark=",")
+                            perc = format(perc[notZerosIndx],digits=2)
+                            states = as.vector(tbl$state_cd_txt[notZerosIndx])
+                            tableData = data.frame(cbind(states,y2,x2,perc))
+
+                            x = rank(x)
+                            y = rank(y)
+
+                            colnames(tableData) <- c("State",currentPeriodName,previousPeriodName,"Percent_Change")
+
+#                            if(cor.test(x,y)$p.value > sigCutoff){"Outlier"} else {"No correlated (i.e., systematic) problems"}
+
+                            outliers = try(outlierTest(lm(y~x),cutoff=0.05,n.max=Inf))
+                            outlierIndices = as.numeric(attr(outliers[[1]],"names"))
+                            outlierRanks = c(x[outlierIndices],y[outlierIndices])
+                            outlierTbl = tableData[outlierIndices,]
+                            outlierPerc = max(perc[outlierIndices])
+                            rankFilterTest = max(outlierRanks)
+
+                            if(length(outlierIndices) > 0
+                               && !is.na(outliers$bonf.p[[1]])
+                               && outliers$bonf.p[[1]] < sigCutoff
+                               && rankFilterTest > rankCutoff
+                               && as.numeric(outlierPerc) > percChgCutoff
+                               && try(cor.test(x,y)$p.value) > correlSigCutoff){
+
+                                    cat("\\begin{frame}[shrink=5]\n")
+                                    cat("\\frametitle{",attributeNames[m],", Bus. Line: ",secondaryBusLvls[j],", Peril: ",secondaryPerilLvls[i],", Division: ",secondaryDivLvls[k],"}\n",sep="")
+
+                                    #Make LaTeX Table
+                                    LaTeXtable = xtable(format(outlierTbl,big.mark=",",scientific=FALSE,digits=2),label=paste(attributeNamesUnderScore[m],secondaryBusLvls[j],secondaryPerilLvls[i],secondaryDivLvls[k],sep=""),digits=c(0,0,0,0,2),align="rlrrr")
+                                    print(LaTeXtable,table.placement="tbp",size="\\tiny",big.mark=",",include.rownames=FALSE)
+
+                                    #Make outlier scatterplot
+                                    row.names(tableData) <- as.vector(tableData$State)
+                                    tableData = tableData[,-1]
+
+                                    pdf(paste(figureOutput,attributeNamesUnderScore[m],secondaryBusLvls[j],secondaryPerilLvls[i],secondaryDivLvls[k],".pdf",sep=""))
+                                    try(scatterplot(x,y,xlab="Ranking of Overall Risk Count Growth",ylab=paste(attributeNames[m]," Ranking of Risk Count Change",sep=""),id.n=10,labels=row.names(tableData),boxplots=FALSE,smooth=FALSE,spread=FALSE),silent=FALSE)
+                                    dev.off()
+
+                                    cat("\\begin{figure}\n")
+                                    cat("\\centering\n")
+                                    cat("\\includegraphics[width=.60\\textwidth]{",figureOutput,attributeNamesUnderScore[m],secondaryBusLvls[j],secondaryPerilLvls[i],secondaryDivLvls[k],".pdf}\n",sep="")
+                                    cat("\\caption{Year-over-year scatter plot comparison of ",attributeNames[m],"}\n",sep="")
+                                    cat("\\label{fig:",attributeNamesUnderScore[m],secondaryBusLvls[j],secondaryPerilLvls[i],secondaryDivLvls[k],"}\n",sep="")
+                                    cat("\\end{figure}\n")
+                                    cat("\\end{frame}\n\n")
+
+#                                    print(paste("CHECK: ",attributeNamesUnderScore[m],secondaryBusLvls[j],secondaryPerilLvls[i],secondaryDivLvls[k],sep=""))
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+if(!is.na(emptyPrevPeriod)){
+    write.csv(emptyPrevPeriod,paste(excelOutput,"SecondaryCharEmptyPrevPeriod.csv",sep=""))
+    if(length(emptyPrevPeriod[,1]) < 30){
+        cat("\n\\subsection{Secondary Characteristics with Empty Previous Period}\n")
+        cat("\\begin{frame}")
+        cat("\\frametitle{Secondary Characteristics with Values Currently, and No Values Previously}\n")
+        LaTeXtable = xtable(emptyPrevPeriod
+            ,caption=paste("Data is now appearing in these combinations where there was none previously. Totals are overall risk counts.")
+            ,label="SecondaryRiskEmptyPrev",digits=c(0,0,0,0,0,0,0))
+            print(LaTeXtable,table.placement="tbp",size="\\tiny")
+        cat("\\end{frame}\n\n")
+    }
+    if(length(emptyPrevPeriod[,1]) >= 30){
+        cat("\n\\subsection{Secondary Characteristics with Empty Previous Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Secondary Characteristics with Values Currently, and No Values Previously}\n")
+        cat("There are too many instances to include in a slide. The results were automatically exported to Excel for further review.\n")
+        cat("\\end{frame}\n\n")
+    }
+}
+
+if(!is.na(emptyCurPeriod)){
+    write.csv(emptyCurPeriod,paste(excelOutput,"SecondaryCharEmptyCurPeriod.csv",sep=""))
+    if(length(emptyCurPeriod[,1]) < 30){
+        cat("\n\\subsection{Secondary Characteristics with Empty Current Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Secondary Characteristics with No Values Currently, and Values Previously}\n")
+        LaTeXtable = xtable(emptyCurPeriod
+            ,caption=paste("No data is appearing in these combinations where there used to be data previously. Totals are overall risk counts.")
+            ,label="SecondaryRiskEmptyCur",digits=c(0,0,0,0,0,0,0))
+            print(LaTeXtable,table.placement="tbp",size="\\tiny")
+        cat("\\end{frame}\n\n")
+    }
+    if(length(emptyCurPeriod[,1]) >= 30){
+        cat("\n\\subsection{Secondary Characteristics with Empty Current Period}\n")
+        cat("\\begin{frame}\n")
+        cat("\\frametitle{Secondary Characteristics with No Values Currently, and Values Previously}\n")
+        cat("There are too many instances to include in a slide. The results were automatically exported to Excel for further review.\n")
+        cat("\\end{frame}\n\n")
+    }
+}
+@
+
+<<name="LaTeXSecondaryTotalsTables",echo=FALSE,quiet=TRUE,results=hide>>=
+#Commercial Lines Secondary Characterstics
+secondaryCur = sqldf("select * from secondaryCategoriesCurTbl where peril_cd in('FF') and Business in('CP')")
+secondaryCur = secondaryCategoriesCurTbl[,c(-1,-2,-3,-4)]
+secondaryCur = colSums(secondaryCur)
+
+#Repeat the queries for the previous period
+secondaryPrev = sqldf("select * from secondaryCategoriesPrevTbl where peril_cd in('FF') and Business in('CP')")
+secondaryPrev = secondaryCategoriesPrevTbl[,c(-1,-2,-3,-4)]
+secondaryPrev = colSums(secondaryPrev)
+
+secondaryDiff = secondaryCur - secondaryPrev
+riskCharacteriticsComparisonTable = cbind(secondaryCur,secondaryPrev,secondaryCur/secondaryPrev - 1)
+riskCharacteriticsComparisonTable = data.frame(riskCharacteriticsComparisonTable)
+greaterThanZero = which(riskCharacteriticsComparisonTable[,3] > 0)
+noZeros = riskCharacteriticsComparisonTable[greaterThanZero,]
+colnames(noZeros) = c(currentPeriodName,previousPeriodName,"%Diff")
+
+#cat("\\begin{frame}[shrink=5]\n")
+#cat("\\frametitle{Commercial Secondary Risk Characteristics}\n")
+#LaTeXtable = xtable(noZeros,caption="Commercial lines secondary risk characteristics"
+#,label="SecondaryRiskCharacteristicsCP",digits=c(0,4,4,4))
+#print(LaTeXtable,table.placement="tbp",size="\\tiny")
+#cat("\\end{frame}\n\n")
+
+#Personal Lines Secondary Characterstics
+secondaryCur = sqldf("select * from secondaryCategoriesCurTbl where peril_cd in('FF') and Business in('PP')")
+secondaryCur = secondaryCategoriesCurTbl[,c(-1,-2,-3,-4)]
+secondaryCur = colSums(secondaryCur)
+
+#Repeat the queries for the previous period
+secondaryPrev = sqldf("select * from secondaryCategoriesPrevTbl where peril_cd in('FF') and Business in('PP')")
+secondaryPrev = secondaryCategoriesPrevTbl[,c(-1,-2,-3,-4)]
+secondaryPrev = colSums(secondaryPrev)
+
+secondaryDiff = secondaryCur - secondaryPrev
+riskCharacteriticsComparisonTable = cbind(secondaryCur,secondaryPrev,secondaryCur/secondaryPrev - 1)
+riskCharacteriticsComparisonTable = data.frame(riskCharacteriticsComparisonTable)
+greaterThanZero = which(riskCharacteriticsComparisonTable[,3] > 0)
+noZeros = riskCharacteriticsComparisonTable[greaterThanZero,]
+colnames(noZeros) = c(currentPeriodName,previousPeriodName,"%Diff")
+
+#LaTeXtable = xtable(noZeros,caption="Personal lines secondary risk characteristics"
+#label="SecondaryRiskCharacteristicsPP",digits=c(0,4,4,4))
+
+#print(LaTeXtable,table.placement="tbp",size="\\tiny")
+@
+
+
+<<name="WriteSecondaryCharacteristicsToExcel",echo=FALSE,quiet=TRUE,results=hide>>=
+write.csv(riskCharacteriticsComparisonTable,paste(excelOutput,"SecondaryRiskCharacteristics.csv",sep=""))
+@
+
+\section{Replacement Ratios}
+
+<<name="NumericalCustomTables",echo=FALSE,quiet=TRUE,results=tex>>=
+############################################
+# Individual custom tables on numeric data #
+############################################
+# Replacement cost and limits comparisons  #
+############################################
+
+##Personal Lines##
+
+#Prev Period Bldg Personal Lines
+queryRepValAndLimitBldgPrevPERS <- paste("SELECT
+      sum(cast(RepValBldg as float)) as RepValBldg
+      ,sum(cast(Limit1 as float)) as Limit1
+      ,(sum(cast(Limit1 as float)) / sum(cast(RepValBldg as float)))*100 as DiffRepValBldgAndLimit1
+  FROM ",dataTableRawUnstackedPrev,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('PP')")
+
+RepValAndLimitBldgPrevPERS = sqlQuery(connection, queryRepValAndLimitBldgPrevPERS)
+####
+
+#Previous Period OStr Personal Lines
+queryRepValAndLimitOStrPrevPERS <- paste("SELECT
+      sum(cast(RepValOStr as float)) as RepValOStr
+      ,sum(cast(Limit2 as float)) as Limit2
+      ,(sum(cast(Limit2 as float)) / sum(cast(RepValOStr as float)))*100 as DiffRepValBldgAndLimit2
+  FROM ",dataTableRawUnstackedPrev,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('PP')")
+
+RepValAndLimitOStrPrevPERS = sqlQuery(connection, queryRepValAndLimitOStrPrevPERS)
+####
+
+#Prev Cont
+queryRepValAndLimitContPrevPERS <- paste("SELECT
+      sum(cast(RepValCont as float)) as RepValCont
+      ,sum(cast(Limit3 as float)) as Limit3
+      ,(sum(cast(Limit3 as float)) / sum(cast(RepValCont as float)))*100 as DiffRepValBldgAndLimit3
+  FROM ",dataTableRawUnstackedPrev,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('PP')")
+
+RepValAndLimitContPrevPERS = sqlQuery(connection, queryRepValAndLimitContPrevPERS)
+####
+
+#Prev Time
+queryRepValAndLimitTimePrevPERS <- paste("SELECT
+      sum(cast(RepValTime as float)) as RepValTime
+      ,sum(cast(Limit4 as float)) as Limit4
+      ,(sum(cast(Limit4 as float)) / sum(cast(RepValTime as float)))*100 as DiffRepValBldgAndLimit4
+  FROM ",dataTableRawUnstackedPrev,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('PP')")
+
+RepValAndLimitTimePrevPERS = sqlQuery(connection, queryRepValAndLimitTimePrevPERS)
+####
+
+
+#Cur Personal Lines
+#Cur Bldg
+queryRepValAndLimitBldgCurPERS <- paste("SELECT
+      sum(cast(RepValBldg as float)) as RepValBldg
+      ,sum(cast(Limit1 as float)) as Limit1
+      ,(sum(cast(Limit1 as float)) / sum(cast(RepValBldg as float)))*100 as DiffRepValBldgAndLimit1
+  FROM ",dataTableRawUnstackedCur,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('PP')")
+
+RepValAndLimitBldgCurPERS = sqlQuery(connection, queryRepValAndLimitBldgCurPERS)
+####
+
+#Cur OStr
+queryRepValAndLimitOStrCurPERS <- paste("SELECT
+      sum(cast(RepValOStr as float)) as RepValOStr
+      ,sum(cast(Limit2 as float)) as Limit2
+      ,(sum(cast(Limit2 as float)) / sum(cast(RepValOStr as float)))*100 as DiffRepValBldgAndLimit2
+  FROM ",dataTableRawUnstackedCur,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('PP')")
+
+RepValAndLimitOStrCurPERS = sqlQuery(connection, queryRepValAndLimitOStrCurPERS)
+####
+
+#Cur Cont
+queryRepValAndLimitContCurPERS <- paste("SELECT
+      sum(cast(RepValCont as float)) as RepValCont
+      ,sum(cast(Limit3 as float)) as Limit3
+      ,(sum(cast(Limit3 as float)) / sum(cast(RepValCont as float)))*100 as DiffRepValBldgAndLimit3
+  FROM ",dataTableRawUnstackedCur,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('PP')")
+
+RepValAndLimitContCurPERS = sqlQuery(connection, queryRepValAndLimitContCurPERS)
+
+#Cur Time
+queryRepValAndLimitTimeCurPERS <- paste("SELECT
+      sum(cast(RepValTime as float)) as RepValTime
+      ,sum(cast(Limit4 as float)) as Limit4
+      ,(sum(cast(Limit4 as float)) / sum(cast(RepValTime as float)))*100 as DiffRepValBldgAndLimit4
+  FROM ",dataTableRawUnstackedCur,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('PP')")
+
+RepValAndLimitTimeCurPERS = sqlQuery(connection, queryRepValAndLimitTimeCurPERS)
+####
+
+##Commercial Lines##
+
+#Prev Bldg
+queryRepValAndLimitBldgPrevCOMM <- paste("SELECT
+      sum(cast(RepValBldg as float)) as RepValBldg
+      ,sum(cast(Limit1 as float)) as Limit1
+      ,(sum(cast(Limit1 as float)) / sum(cast(RepValBldg as float)))*100 as DiffRepValBldgAndLimit1
+  FROM ",dataTableRawUnstackedPrev,"
+    WHERE peril_cd in('FF')
+  AND left(Business,2) in('CP')")
+
+RepValAndLimitBldgPrevCOMM = sqlQuery(connection, queryRepValAndLimitBldgPrevCOMM)
+####
+
+#Prev OStr
+queryRepValAndLimitOStrPrevCOMM <- paste("SELECT
+      sum(cast(RepValOStr as float)) as RepValOStr
+      ,sum(cast(Limit2 as float)) as Limit2
+      ,(sum(cast(Limit2 as float)) / sum(cast(RepValOStr as float)))*100 as DiffRepValBldgAndLimit2
+  FROM ",dataTableRawUnstackedPrev,"
+    WHERE peril_cd in('FF')
+  AND left(Business,2) in('CP')")
+
+RepValAndLimitOStrPrevCOMM = sqlQuery(connection, queryRepValAndLimitOStrPrevCOMM)
+####
+
+#Prev Cont
+queryRepValAndLimitContPrevCOMM <- paste("SELECT
+      sum(cast(RepValCont as float)) as RepValCont
+      ,sum(cast(Limit3 as float)) as Limit3
+      ,(sum(cast(Limit3 as float)) / sum(cast(RepValCont as float)))*100 as DiffRepValBldgAndLimit3
+  FROM ",dataTableRawUnstackedPrev,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('CP')")
+
+RepValAndLimitContPrevCOMM = sqlQuery(connection, queryRepValAndLimitContPrevCOMM)
+####
+
+#Prev Time
+queryRepValAndLimitTimePrevCOMM <- paste("SELECT
+      sum(cast(RepValTime as float)) as RepValTime
+      ,sum(cast(Limit4 as float)) as Limit4
+      ,(sum(cast(Limit4 as float)) / sum(cast(RepValTime as float)))*100 as DiffRepValBldgAndLimit4
+  FROM ",dataTableRawUnstackedPrev,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('CP')")
+
+RepValAndLimitTimePrevCOMM = sqlQuery(connection, queryRepValAndLimitTimePrevCOMM)
+####
+
+
+#Cur Commercial Lines
+#Cur Bldg
+queryRepValAndLimitBldgCurCOMM <- paste("SELECT
+      sum(cast(RepValBldg as float)) as RepValBldg
+      ,sum(cast(Limit1 as float)) as Limit1
+      ,(sum(cast(Limit1 as float)) / sum(cast(RepValBldg as float)))*100 as DiffRepValBldgAndLimit1
+  FROM ",dataTableRawUnstackedCur,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('CP')")
+
+RepValAndLimitBldgCurCOMM = sqlQuery(connection, queryRepValAndLimitBldgCurCOMM)
+####
+
+#Cur OStr
+queryRepValAndLimitOStrCurCOMM <- paste("SELECT
+      sum(cast(RepValOStr as float)) as RepValOStr
+      ,sum(cast(Limit2 as float)) as Limit2
+      ,(sum(cast(Limit2 as float)) / sum(cast(RepValOStr as float)))*100 as DiffRepValBldgAndLimit2
+  FROM ",dataTableRawUnstackedCur,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('CP')")
+
+RepValAndLimitOStrCurCOMM = sqlQuery(connection, queryRepValAndLimitOStrCurCOMM)
+####
+
+#Cur Cont
+queryRepValAndLimitContCurCOMM <- paste("SELECT
+      sum(cast(RepValCont as float)) as RepValCont
+      ,sum(cast(Limit3 as float)) as Limit3
+      ,(sum(cast(Limit3 as float)) / sum(cast(RepValCont as float)))*100 as DiffRepValBldgAndLimit3
+  FROM ",dataTableRawUnstackedCur,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('CP')")
+
+RepValAndLimitContCurCOMM = sqlQuery(connection, queryRepValAndLimitContCurCOMM)
+
+#Cur Time
+queryRepValAndLimitTimeCurCOMM <- paste("SELECT
+      sum(cast(RepValTime as float)) as RepValTime
+      ,sum(cast(Limit4 as float)) as Limit4
+      ,(sum(cast(Limit4 as float)) / sum(cast(RepValTime as float)))*100 as DiffRepValBldgAndLimit4
+  FROM ",dataTableRawUnstackedCur,"
+  WHERE peril_cd in('FF')
+  AND left(Business,2) in('CP')")
+
+RepValAndLimitTimeCurCOMM = sqlQuery(connection, queryRepValAndLimitTimeCurCOMM)
+####
+
+
+##Calculate percentage limit by replacement cost ratios and comparisons
+
+#Personal Lines Tables
+#Personal Building
+RepValLimitsBldgTbl = t(rbind(format(RepValAndLimitBldgPrevPERS,big.mark=",",scientific=FALSE,nsmall=0),format(RepValAndLimitBldgCurPERS,big.mark=",",scientific=FALSE,nsmall=0)))
+
+colnames(RepValLimitsBldgTbl) = c("Previous Period","Current Period")
+row.names(RepValLimitsBldgTbl) = c("Building Replacement Value","Building Limit","Limit to Replacement Value %")
+
+RepValLimitsBldgTbl = format(RepValLimitsBldgTbl,big.mark=",",scientific=FALSE,nsmall=0)
+
+cat("\\begin{frame}[shrink=5]\n")
+cat("\\frametitle{Personal Lines Building Replacement Ratio}\n")
+LaTeXtable = xtable(RepValLimitsBldgTbl
+,caption="Personal Lines Building replacement value and coverage limit comparison."
+,label="RepValLimitsPersBldgTbl",digits=c(0,0,0),align="rrr")
+print(LaTeXtable,table.placement="tbp",size="\\tiny")
+cat("\\end{frame}\n\n")
+
+#Personal other structures
+RepValLimitsOStrTbl = t(rbind(format(RepValAndLimitOStrPrevPERS,big.mark=",",scientific=FALSE,nsmall=0),format(RepValAndLimitOStrCurPERS,big.mark=",",scientific=FALSE,nsmall=0)))
+
+colnames(RepValLimitsOStrTbl) = c("Previous Period","Current Period")
+row.names(RepValLimitsOStrTbl) = c("Other Structures Replacement Value","Other Structures Limit","Limit to Replacement Value %")
+
+cat("\\begin{frame}[shrink=5]\n")
+cat("\\frametitle{Personal Lines Other Structure Replacement Ratio}\n")
+LaTeXtable = xtable(RepValLimitsOStrTbl
+,caption="Personal Lines Other Structure replacement value and coverage limit comparison."
+,label="RepValLimitsPersOStrTbl",digits=c(0,0,0),align="rrr")
+print(LaTeXtable,table.placement="tbp",size="\\tiny")
+cat("\\end{frame}\n\n")
+
+#Personal contents
+RepValLimitsContTbl = t(rbind(format(RepValAndLimitContPrevPERS,big.mark=",",scientific=FALSE,nsmall=0),format(RepValAndLimitContCurPERS,big.mark=",",scientific=FALSE,nsmall=0)))
+
+colnames(RepValLimitsContTbl) = c("Previous Period","Current Period")
+row.names(RepValLimitsContTbl) = c("Contents Replacement Value","Contents Limit","Limit to Replacement Value %")
+
+cat("\\begin{frame}[shrink=5]\n")
+cat("\\frametitle{Personal Lines Contents Replacement Ratio}\n")
+LaTeXtable = xtable(RepValLimitsContTbl
+,caption="Personal Lines Contents replacement value and coverage limit comparison."
+,label="RepValLimitsPersContTbl",digits=c(0,0,0),align="rrr")
+print(LaTeXtable,table.placement="tbp",size="\\tiny")
+cat("\\end{frame}\n\n")
+
+#Personal time element
+RepValLimitsTimeTbl = t(rbind(format(RepValAndLimitTimePrevPERS,big.mark=",",scientific=FALSE,nsmall=0),format(RepValAndLimitTimeCurPERS,big.mark=",",scientific=FALSE,nsmall=0)))
+
+colnames(RepValLimitsTimeTbl) = c("Previous Period","Current Period")
+row.names(RepValLimitsTimeTbl) = c("Time Element Replacement Value","Time Element Limit","Limit to Replacement Value %")
+
+cat("\\begin{frame}[shrink=5]\n")
+cat("\\frametitle{Personal Lines Time Element Replacement Ratio}\n")
+LaTeXtable = xtable(RepValLimitsTimeTbl
+,caption="Personal Lines Time Element replacement value and coverage limit comparison."
+,label="RepValLimitsPersTimeTbl",digits=c(0,0,0),align="rrr")
+print(LaTeXtable,table.placement="tbp",size="\\tiny")
+cat("\\end{frame}\n\n")
+
+#calculate time element divided by building coverage ratio
+timeElementToBldgPrevRatio = RepValAndLimitTimePrevPERS[1,1]/RepValAndLimitBldgPrevPERS[1,1]*100
+write(format(timeElementToBldgPrevRatio,digits=2,nsmall=2),file="Tables/TimeElementToBldgPrevRatioPers.tex",sep="")
+
+timeElementToBldgCurRatio = RepValAndLimitTimeCurPERS[1,1]/RepValAndLimitBldgCurPERS[1,1]*100
+write(format(timeElementToBldgCurRatio,digits=2,nsmall=2),file="Tables/TimeElementToBldgCurRatioPers.tex",sep="")
+
+
+#Commercial Lines Tables
+#Commercial Building
+RepValLimitsBldgTbl = t(rbind(format(RepValAndLimitBldgPrevCOMM,big.mark=",",scientific=FALSE,nsmall=0),format(RepValAndLimitBldgCurCOMM,big.mark=",",scientific=FALSE,nsmall=0)))
+
+colnames(RepValLimitsBldgTbl) = c("Previous Period","Current Period")
+row.names(RepValLimitsBldgTbl) = c("Building Replacement Value","Building limit","Limit to Replacement Value %")
+
+RepValLimitsBldgTbl = format(RepValLimitsBldgTbl,big.mark=",",scientific=FALSE,nsmall=0)
+
+cat("\\begin{frame}[shrink=5]\n")
+cat("\\frametitle{Commercial Lines Building Replacement Ratio}\n")
+LaTeXtable = xtable(RepValLimitsBldgTbl
+,caption="Commercial Lines Building replacement value and coverage limit comparison."
+,label="RepValLimitsCommBldgTbl",digits=c(0,0,0),align="rrr")
+print(LaTeXtable,table.placement="tbp",size="\\tiny")
+cat("\\end{frame}\n\n")
+
+#Commercial other structures
+RepValLimitsOStrTbl = t(rbind(format(RepValAndLimitOStrPrevCOMM,big.mark=",",scientific=FALSE,nsmall=0),format(RepValAndLimitOStrCurCOMM,big.mark=",",scientific=FALSE,nsmall=0)))
+
+colnames(RepValLimitsOStrTbl) = c("Previous Period","Current Period")
+row.names(RepValLimitsOStrTbl) = c("Other Structures Replacement Value","Other Structures Limit","Limit to Replacement Value %")
+
+cat("\\begin{frame}[shrink=5]\n")
+cat("\\frametitle{Commercial Lines Other Structure Replacement Ratio}\n")
+LaTeXtable = xtable(RepValLimitsOStrTbl
+,caption="Commercial Lines Other Structure replacement value and coverage limit comparison."
+,label="RepValLimitsCommOStrTbl",digits=c(0,0,0),align="rrr")
+print(LaTeXtable,table.placement="tbp",size="\\tiny")
+cat("\\end{frame}\n\n")
+
+#Commercial contents
+RepValLimitsContTbl = t(rbind(format(RepValAndLimitContPrevCOMM,big.mark=",",scientific=FALSE,nsmall=0),format(RepValAndLimitContCurCOMM,big.mark=",",scientific=FALSE,nsmall=0)))
+
+colnames(RepValLimitsContTbl) = c("Previous Period","Current Period")
+row.names(RepValLimitsContTbl) = c("Contents Replacement Value","Contents Limit","Limit to Replacement Value %")
+
+cat("\\begin{frame}[shrink=5]\n")
+cat("\\frametitle{Commercial Lines Contents Replacement Ratio}\n")
+LaTeXtable = xtable(RepValLimitsContTbl
+,caption="Commercial Lines Contents replacement value and coverage limit comparison."
+,label="RepValLimitsCommContTbl",digits=c(0,0,0),align="rrr")
+print(LaTeXtable,table.placement="tbp",size="\\tiny")
+cat("\\end{frame}\n\n")
+
+#Commercial time element
+RepValLimitsTimeTbl = t(rbind(format(RepValAndLimitTimePrevCOMM,big.mark=",",scientific=FALSE,nsmall=0),format(RepValAndLimitTimeCurCOMM,big.mark=",",scientific=FALSE,nsmall=0)))
+
+colnames(RepValLimitsTimeTbl) = c("Previous Period","Current Period")
+row.names(RepValLimitsTimeTbl) = c("Time Element Replacement Value","Time Element Limit","Limit to Replacement Value %")
+
+cat("\\begin{frame}[shrink=5]\n")
+cat("\\frametitle{Commercial Lines Time Element Replacement Ratio}\n")
+LaTeXtable = xtable(RepValLimitsTimeTbl
+,caption="Commercial Lines Time Element replacement value and coverage limit comparison."
+,label="RepValLimitsCommTimeTbl",digits=c(0,0,0),align="rrr")
+print(LaTeXtable,table.placement="tbp",size="\\tiny")
+cat("\\end{frame}\n\n")
+@
+
+<<name="CloseDatabaseConnections",echo=FALSE,quiet=TRUE,results=hide>>=
+   odbcCloseAll()
+@
+
+\end{document}
+
+
+
+
+
+
