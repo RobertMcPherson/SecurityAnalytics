@@ -12,6 +12,7 @@
 \usepackage[section]{placeins}
 \usepackage{Sweave}
 \usepackage{upquote}
+\SweaveOpts{keep.source=TRUE}
 \urlstyle{sf} %style consistent with URL package - can also use rm style
 \usetheme{Singapore}%define the beamer theme
 \setbeamertemplate{navigation symbols}{}%remove navigation symbols
@@ -19,6 +20,14 @@
 \setbeamertemplate{headline}{}%remove the navigation header
 %\setbeamertemplate{subsection in head/foot shaded}[default][20]
 %\logo{\includegraphics[width=0.15\textwidth]{nw_logo.jpg}} %change here. I used an eps file logo, you can use jpg or other format
+\AtBeginDocument{ 
+\DefineVerbatimEnvironment{Sinput}{Verbatim} {xleftmargin=2em,fontsize= 
+\footnotesize} 
+\DefineVerbatimEnvironment{Soutput}{Verbatim}{xleftmargin=2em,fontsize= 
+\footnotesize} 
+\DefineVerbatimEnvironment{Scode}{Verbatim}{xleftmargin=2em,fontsize= 
+\footnotesize} 
+} 
 
 \title{\bfseries{Utilizing the R Statistical Language for Analyzing Server Logs}}
 \author{Ryan Talabis and Robert McPherson}
@@ -57,10 +66,11 @@ library(stringr)
 library(sqldf)
 library(data.table)
 library(outliers)
+library(car) #For Bonferoni outlier test
 library(xtable)
 @ 
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
   \frametitle{Read in the Data}
   \begin{itemize}
   \item Data can be read from text files of server logs.
@@ -68,7 +78,7 @@ library(xtable)
   \item Corpus function is used to convert data into a corpus, consisting of documents and words.
   \item Each line in the log can be considered a document, so that comparisons can be made across time.  
   \end{itemize}
-<<name="readData",echo=TRUE,quiet=FALSE,results=tex>>=
+<<name="readData",echo=TRUE,quiet=TRUE,results=tex>>=
 #Read server log - text file
 secureData <- scan("secure.txt", character(0), sep = "\n") # separate each line
 
@@ -79,21 +89,23 @@ inspect(data[1:5]) #Inspect the first five entries in the data
 @ 
 \end{frame}
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
   \frametitle{Function to Trim White Space}  
   \begin{itemize}
   \item Create a function called, ``trim'', as a convenient way to remove white space in the data transformation process.
   \item Utilizes the R function, gsub, and regular expressions.
   \end{itemize}  
-<<name="functionStripWhiteSpace",echo=TRUE,quiet=FALSE,results=tex>>=
+<<name="functionStripWhiteSpace",echo=TRUE,quiet=TRUE,results=tex>>=
+
 #Function to strip white space from strings
 trim <- function (x) gsub("^\\s+|\\s+$", "", x)
 @
 \end{frame}
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
 \frametitle{Using Regular Expressions to Parse the Time Stamp}  
-<<name="timeStampRegularExpressions",echo=TRUE,quiet=FALSE,results=tex>>=  
+<<name="timeStampRegularExpressions",echo=TRUE,quiet=TRUE,results=verbatim>>=  
+
 #Regular expressions for parsing date information
 regexpDate = "[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"
 regexpDay = "\\s[0-9][0-9]\\s"
@@ -106,12 +118,14 @@ month = trim(str_extract(secureData[1:1000],regexpMonth))
 #Make a data frame consisting of month, day, and time columns
 timeStampCols = data.frame(cbind(month, day, time))
 timeStampCols[1:5,]
+
 @ 
 \end{frame}
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
 \frametitle{Transforming the Text Corpus with the tm_map Function}    
-<<name="transformations",echo=TRUE,quiet=FALSE,results=tex>>=  
+<<name="transformations",echo=TRUE,quiet=TRUE,results=verbatim>>=  
+
 data2 = tm_map(data, stripWhitespace)
 data2 = tm_map(data2, tolower)
 stopWords = c(stopwords("english"),"uiftp","sshd")
@@ -123,57 +137,61 @@ inspect(data2[1:5])
 @ 
 \end{frame}
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
 \frametitle{Making a Document Term Matrix with the DocumentTermMatrix Function}  \begin{itemize}
 \item A document term matrix shows the frequency count of each word.
 \item Frequencies are shown for each document.
 \item Documents are in rows.
 \item Terms, or words, are in columns.
 \end{itemize}  
-<<name="documentTermMatrix",echo=TRUE,quiet=FALSE,results=tex>>=  
+<<name="documentTermMatrix",echo=TRUE,quiet=TRUE,results=verbatim>>=  
+
 #Make a word frequency matrix, with documents as rows, and terms as columns
 dtm = DocumentTermMatrix(data2)
 inspect(dtm[1:5,1:5])
 @ 
 \end{frame}
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
 \frametitle{Removing Sparse Terms}    
 \begin{itemize}
 \item It can be useful to remove infrequently occuring words.
 \item Sometimes the most significant terms are the most fequently occuring ones.
 \item Use the removeSparseTerms function. 
 \end{itemize}  
-<<name="removeSparseTerms",echo=TRUE,quiet=FALSE,results=tex>>=  
+<<name="removeSparseTerms",echo=TRUE,quiet=TRUE,results=verbatim>>=  
+
 #Remove and inspect sparse terms, with at least 80% sparse occurence
 dtm = removeSparseTerms(dtm, 0.85)
 inspect(dtm[1:5,1:5])
 @ 
 \end{frame}
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
 \frametitle{Transposing the Term Matrix}    
 \begin{itemize}
 \item Can opt to have the terms in rows, and the documents in columns. 
 \item Use the TermDocumentMatrix for this.
 \item Same as the DocumentTermMatrix, but transposed.
 \end{itemize}  
-<<name="termDocumentMatrix",echo=TRUE,quiet=FALSE,results=tex>>=  
+<<name="termDocumentMatrix",echo=TRUE,quiet=TRUE,results=verbatim>>=  
+
 #Make a word frequency matrix, with terms as rows, and documents as columns
 dtm2 = TermDocumentMatrix(data2)
-inspect(dtm2)
+inspect(dtm2[1:5,1:5])
 @ 
 \end{frame}
 
 \section{Date and Time Stamp Handling}
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
 \frametitle{Append Time Element Columns to Text Frequency Columns}    
 \begin{itemize}
 \item Convert the word corpus to text, so that it can be appended.
 \item The example below includes a version with all time stamp elements, and another with only the month.
 \end{itemize}  
-<<name="appendTimeStamp",echo=TRUE,quiet=FALSE,results=tex>>=  
+<<name="appendTimeStamp",echo=TRUE,quiet=TRUE,results=hide>>=  
+
 #Add month, day, and time columns to the document term matrix
 #First, turn the dtm into a plain text object
 dtmText = inspect(dtm)
@@ -186,16 +204,13 @@ dtmMonth = data.frame(cbind(month, dtmText))
 @ 
 \end{frame}
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
 \frametitle{Utilize SQL as One Means of Grouping Data}    
 \begin{itemize}
 \item Utilize the sqldf function.
 \item This function allows for writing SQL queries against an R data frame.
 \end{itemize}  
-<<name="sqldfQueries",echo=TRUE,quiet=FALSE,results=tex>>=  
-#Get counts of entries for each month for use in bonferoni outlier detection
-sqldf("select month, count(*) from dtmStamp group by month")
-sqldf("select month, count(*) from dtmMonth group by month")
+<<name="sqldfQueries",echo=TRUE,quiet=TRUE,results=verbatim>>=  
 
 #Sum up the frequencies each of the top terms for each month
 topTermsByMonth = sqldf("select month
@@ -210,13 +225,13 @@ topTermsByMonth = sqldf("select month
 ,sum(session) as session
 from dtmMonth group by month")
 
-aggregate(dtmMonth[,-1], by = list(factor(dtmMonth$month)), sum)
+topTermsByMonth
 @ 
 \end{frame}
 
 \section{Text Analysis}
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
 \frametitle{Finding High Frequency Terms}    
 \begin{itemize}
 \item Frequently occuring words can be identified with the findFreqTerms function
@@ -224,20 +239,22 @@ aggregate(dtmMonth[,-1], by = list(factor(dtmMonth$month)), sum)
 \item findFreqTerms(x, lowfreq = 0, highfreq = Inf) 
 \item Can also specify only a single, lower bound, with upper bound defaulting to infinity  
 \end{itemize}  
-<<name="findFrequentTerms",echo=TRUE,quiet=FALSE,results=tex>>=  
+<<name="findFrequentTerms",echo=TRUE,quiet=TRUE,results=verbatim>>=  
+
 #Find the top 20 most frequent terms
 findFreqTerms(dtm, 20)
 @ 
 \end{frame}
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
 \frametitle{Find Associated Terms}    
 \begin{itemize}
 \item Can find terms in the text that are associated with a given term.
 \item Use the findAssocs function
 \item Can specify the minimum correlation.
 \end{itemize}  
-<<name="findAssociatedTerms",echo=TRUE,quiet=FALSE,results=tex>>=  
+<<name="findAssociatedTerms",echo=TRUE,quiet=TRUE,results=verbatim>>=  
+
 #Find associated terms with the term, "root", and a correlation of at least 0.4
 findAssocs(dtm, "session", 0.4)
 findAssocs(dtm, "user", 0.4)
@@ -245,13 +262,14 @@ findAssocs(dtm, "port", 0.4)
 @ 
 \end{frame}
 
-\begin{frame}
+\begin{frame}[containsverbatim,allowframebreaks] 
 \frametitle{Create a Dictionary}    
 \begin{itemize}
 \item Create a dictionary specifying a subset of terms to work with
 \item Use the Dictionary function.
 \end{itemize}  
-<<name="dictionary",echo=TRUE,quiet=FALSE,results=tex>>=  
+<<name="dictionary",echo=TRUE,quiet=TRUE,results=verbatim>>=  
+
 ##Other functions related to selecting specific terms
 
 #Create a dictionary: a subset of terms
@@ -259,28 +277,69 @@ d = Dictionary(c("root", "richard", "invalid", "session"))
 
 #Use dictionary to make a matrix with only the dictionary terms
 dtm_dictionary = TermDocumentMatrix(data2, list(dictionary = d))
-inspect(dtm_dictionary)
+show(dtm_dictionary)
 @ 
 \end{frame}
 
-<<name="sandbox",echo=FALSE,quiet=TRUE,results=hide>>=
-#Bonferoni outlier detection
+\section{Outlier Detection}
 
+<<name="outlierDetection",echo=FALSE,quiet=TRUE,results=tex>>=  
+sigCutoff = 0.05 #Set significance threshold for p-value
+temp = 0 #Initiate variable
+lngth = length(topTermsByMonth)
+y = topTermsByMonth[,2]  
+months = topTermsByMonth[,1]
+terms = colnames(topTermsByMonth)
+figureOutput = "/" 
+#i = 7
+  
+for(i in 3:lngth){
+x = topTermsByMonth[,i]  
+outliers = try(outlierTest(lm(y~x),cutoff=0.05,n.max=Inf))
+outlierIndices = as.numeric(attr(outliers[[1]],"names"))
+outlierRanks = c(x[outlierIndices],y[outlierIndices])
+outlierTbl = data.frame(cbind(paste(months[outlierIndices]), terms[i],x[outlierIndices],y[outlierIndices]))
+colnames(outlierTbl) <- c("Term","Month", "Term Frequency", "Total Month's Entries")
 
-##Second version of grouping, utilizing a more automated technique
-#dtmMonth.dt <- data.table(dtmMonth)
-#setkey(data.dt, month)
-#dtmMonth.dt[, lapply(.SD, sum), by = list(month)]
+if(length(outlierIndices) > 0
+  && !is.na(outliers$bonf.p[[1]])
+  && outliers$bonf.p[[1]] < sigCutoff){
+                              
+cat("\\begin{frame}[shrink=5]\n")
+cat("\\frametitle{Term: ",terms[i],"}\n",sep="")
 
+#Make LaTeX Table
+LaTeXtable = xtable(format(outlierTbl,big.mark=",",scientific=FALSE,digits=2),label=paste(terms[i],sep=""),align="rllrr")
+print(LaTeXtable,table.placement="tbp",size="\\tiny",big.mark=",",include.rownames=FALSE)
 
-#by(iris[, 1:4], Species, mean)
-#by(dtmMonth[,-1], dtmMonth$month, sum)
-#is.numeric(dtmMonth[,-1])
+#Make outlier scatterplot
+pdf(paste(terms[i],".pdf",sep=""))
+try(scatterplot(x,y,xlab="Total Count of Entries",ylab="Term Frequency",id.n=5,labels=paste(months),boxplots=FALSE,smooth=FALSE,spread=FALSE),silent=FALSE)
+dev.off()
 
-?apply
-?aggregate
+cat("\\begin{figure}\n")
+cat("\\centering\n")
+cat("\\includegraphics[width=.60\\textwidth]{",terms[i],".pdf}\n",sep="")
+cat("\\caption{Comparison of term frequency, ",terms[i],", with number of log entries}\n",sep="")
+cat("\\label{fig:",terms[i],"}\n",sep="")
+cat("\\end{figure}\n")
+cat("\\end{frame}\n\n")
 
-#plot(topTermsByMonth$session~topTermsByMonth$rowCount) 
-@
+allOutliersTbl = rbind(temp, outlierTbl)
+temp = allOutliersTbl
+} #End if
+} #End for loop
+@ 
+
+\begin{frame}[containsverbatim,allowframebreaks] 
+\frametitle{Most Significant Outlier Terms and Months}    
+\begin{itemize}
+\item Can write a loop to summarize the most significant outlier terms in a table
+\item Same terms as shown in preceding scatterplot graphs
+\end{itemize}  
+<<name="dictionary",echo=FALSE,quiet=TRUE,results=tex>>=  
+xtable(allOutliersTbl[-1,]) #Negative index removes blank first row
+@ 
+\end{frame}
 
 \end{document}
