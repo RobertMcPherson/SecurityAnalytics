@@ -1,0 +1,58 @@
+Command Line entries that were used and explored in this project for logistic regression in Mahout:
+
+Too many predictors in this version...
+
+/usr/bin/mahout trainlogistic \
+--input statusgroupings.csv \
+--output ./model \
+--target failedaccess \
+   --categories 2 \
+--predictors host identity user time request size referer agent \
+   --types word \
+--features 50 \
+--passes 20 \
+--rate 50 
+
+The version below is better, but the data all have many categories to make much sense of the results.
+
+/usr/bin/mahout trainlogistic \
+--input statusgroupings.csv \
+--output ./model \
+--target failedaccess \
+   --categories 2 \
+--predictors host identity user \
+   --types word \
+--features 50 \
+--passes 20 \
+--rate 50 
+
+The command line input below appeared to provide the most interesting output of the combinations I ran.
+
+/usr/bin/mahout trainlogistic \
+--input statusgroupings.csv \
+--output ./model \
+--target failedaccess \
+   --categories 2 \
+--predictors host \
+   --types word \
+--features 50 \
+--passes 20 \
+--rate 50 
+
+File size could produce some interesting results as a predictor, if we had any attack examples that resulted in retrieving large files.  The command below produces an analysis for this.
+
+/usr/bin/mahout trainlogistic \
+--input statusgroupings.csv \
+--output ./model \
+--target failedaccess \
+   --categories 2 \
+--predictors size \
+   --types word \
+--features 50 \
+--passes 20 \
+--rate 50 
+
+
+
+
+
