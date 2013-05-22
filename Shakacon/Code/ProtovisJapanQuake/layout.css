@@ -1,0 +1,25 @@
+/* By Jason Sundram 5/2010. This should give us a full-screen canvas. */
+
+html,body {
+    margin:0;
+    padding:0;
+    height:100%; /* needed for container min-height */
+    width:100%;
+    background:white;
+    font-family:arial,sans-serif;
+    font-size:small;
+    color:#FFF;
+}
+
+#fig {
+/*  width: 600px; */
+    width: 60%;
+    height: 100%;
+    float:left;
+}
+
+iframe#iframe1{
+    width:40%;
+    height:100%;
+    float:right;
+}

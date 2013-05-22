@@ -1,0 +1,52 @@
+rm(list=ls()) #Remove any objects
+
+library(fBasics)
+library(sqldf)
+
+#Import failed requests file, using standard delimeter in Hive
+failedRequests <- read.table("FailedRequestsByDay.txt",sep="")
+
+#Add column headings
+colnames(failedRequests) <- c("Date","FailedRequestsRatio")
+stdev <- sd(failedRequests$FailedRequestsRatio) #calculate the standard deviation
+avg <- mean(failedRequests$FailedRequestsRatio) #calculate the average
+avgPlus2Stdev <- avg + 2*stdev #mean plus 2 standard deviations
+
+#Identify the days that had failed requests in excess of 2X the standard deviation
+failedRequests[failedRequests[,2]>avgPlus2Stdev,]
+
+#Produce a plot and save it as a PDF
+pdf("PlotOfFailedRequestRatioSeries.pdf")
+plot(failedRequests[,2],type='l',main="Ratio of Failed Server Requests to Successful Requests by Day"
+     ,xlab="Day",ylab="Ratio of Failed Requests to Successful Requests")
+lines(rep(avg,length(failedRequests[,2])))
+lines(rep(avgPlus2Stdev,length(failedRequests[,2])),lty=2)
+legend("topright",c("Average","2 X Standard Deviation"),lty=c(1,2))
+dev.off()
+
+#Create autocorrelation plot to test for seasonality or other autocorrelation effects
+pdf("FaileRequestsAutoCorrelation.pdf")
+acfPlot(failedRequests[,2],lag.max=60)
+dev.off()
+
+
+
+#Import summed status code frequencies grouped by day
+statusFrequencies <- read.table("SummedStatusByDay.txt",sep="")
+statusFrequenciesNumeric <- statusFrequencies[-1,4:length(statusFrequencies)]
+
+colSums <- apply(statusFrequenciesNumeric,2,sum)
+nonEmptyCols <- which(colSums>0)
+str(nonEmptyCols)
+
+plot(statusFrequenciesNumeric[,which(colSums>0)])
+
+
+
+
+
+
+
+
+
+

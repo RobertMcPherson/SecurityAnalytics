@@ -1,6 +1,8 @@
 rm(list=ls()) #Remove any objects
 
 library(fBasics)
+library(sqldf)
+library(ts)
 
 #Import failed requests file, using standard delimeter in Hive
 failedRequests <- read.table("FailedRequestsByDay.txt",sep="")
@@ -27,6 +29,30 @@ dev.off()
 pdf("FaileRequestsAutoCorrelation.pdf")
 acfPlot(failedRequests[,2],lag.max=60)
 dev.off()
+
+
+
+#Import summed status code frequencies grouped by day
+statusFrequencies <- read.table("SummedStatusByDay.txt",sep="")
+statusFrequenciesNumeric <- statusFrequencies[-1,4:length(statusFrequencies)]
+
+#Copy headers from Hive and paste them here.
+colnames(statusFrequenciesNumeric) <- c("100continue","101switchingprotocols","102processing","200ok","201created","202accepted","203nonauthoritativeinformation","204nocontent","205resetcontent","206partialcontent","207multistatus","208alreadyreported","226imused","300multiplechoices","301movedpermanently","302found","303seeother","304notmodified","305useproxy","306switchproxy","307temporaryredirect","308permanentredirect","400badrequest401unauthorized","402paymentrequired","403forbidden","404notfound","405methodnotallowed","406notacceptable","407proxyauthenticationrequired","408requesttimeout","409conflict","410gone","411lengthrequired","412preconditionfailed","413requestentitytoolarge","414requesturitoolong","415unsupportedmediatype","416requestedrangenotsatisfiable","417expectationfailed","418imateapot","420enhanceyourcalm","422unprocessableentity","423locked","424faileddependency","424methodfailure","425unorderedcollection","426upgraderequired","428preconditionrequired","429toomanyrequests","431requestheaderfieldstoolarge","444noresponse","449retrywith","450blockedbywindowsparentalcontrols","451unavailableforlegalreasonsorredirect","494requestheadertoolarge","495certerror","496nocert","497httptohttps","499clientclosedrequest","500internalservererror","501notimplemented","502badgateway","503serviceunavailable","504gatewaytimeout","505httpversionnotsupported","506variantalsonegotiates","507insufficientstorage","508loopdetected","509bandwidthlimitexceeded","510notextended","511networkauthenticationrequired","598networkreadtimeouterror","599networkconnecttimeouterror")
+
+
+colSums <- apply(statusFrequenciesNumeric,2,sum)
+nonEmptyCols <- which(colSums>0)
+str(nonEmptyCols)
+
+X <- statusFrequenciesNumeric[,which(colSums>0)]
+plot(X)
+
+apply(X, CCF(
+
+?CCF
+
+
+
 
 
 

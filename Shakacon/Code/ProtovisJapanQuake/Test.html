@@ -1,0 +1,34 @@
+<html>
+  <head>
+    <title>Test</title>
+    <script type="text/javascript" src="protovis-r3.2.js"></script>
+    <script type="text/javascript" src="japan.js"></script>
+    <style type="text/css">
+
+    </style>
+  </head>
+  <body>
+<!-- <div id="center"><div id="fig"> -->
+
+    <div id="fig">
+       <script type="text/javascript+protovis">
+
+new pv.Panel()
+    .width(150)
+    .height(150)
+  .add(pv.Bar)
+    .data([1, 1.2, 1.7, 1.5, .7, .1])
+    .bottom(0)
+    .width(19)
+    .height(function(d) d * 70)
+    .left(function() this.index * 24 + 5)
+  .anchor("top").add(pv.Label)
+    .textBaseline(function(d) (d < .2) ? "bottom" : "top")
+  .root.render();
+
+
+    </script>
+  </div>
+
+</body>
+</html>
