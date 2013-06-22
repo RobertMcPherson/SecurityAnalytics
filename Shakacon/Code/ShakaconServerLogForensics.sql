@@ -660,6 +660,7 @@ FROM by_day;
 
 
 --Create yearmonthday field with a concatenation of year and monthday fields
+DROP VIEW summed_status_by_day;
 CREATE VIEW summed_status_by_day AS
 SELECT 
 year
@@ -746,11 +747,29 @@ ORDER BY year, monthday ASC;
 INSERT OVERWRITE LOCAL DIRECTORY '/mnt/hgfs/GitHub/SecurityAnalytics/Shakacon/SummedStatusByDay'
 SELECT * FROM summed_status_by_day;
 
+--Show column headings only
 INSERT OVERWRITE LOCAL DIRECTORY '/mnt/hgfs/GitHub/SecurityAnalytics/Shakacon/HeadersSummedStatusByDay'
 SELECT * FROM summed_status_by_day LIMIT 0;
 
 --Use ngrams function to tally word frequencies
 SELECT ngrams(sentences(lower(request)), 1, 100) FROM apachelog GROUP BY host; 
+
+SELECT ngrams(sentences(lower(request)), 1, 100) FROM apachelog; --Do not group by host
+
+DROP TABLE request_field_words;
+CREATE TABLE request_field_words (NEW_ITEM ARRAY<STRUCT<ngram:array<string>, estfrequency:double>>);
+INSERT OVERWRITE TABLE request_field_words
+SELECT ngrams(sentences(lower(request)), 1, 100) as word_map FROM apachelog;
+
+DROP TABLE request_field_words;
+CREATE TABLE request_field_words (NEW_ITEM ARRAY<STRUCT<ngram:array<string>, estfrequency:double>>);
+INSERT OVERWRITE TABLE request_field_words
+SELECT ngrams(sentences(lower(request)), 1, 100) as word_map FROM apachelog WHERE status IN ('500');
+
+DROP TABLE request_field;
+CREATE TABLE request_field (ngram string, estfrequency double);
+INSERT OVERWRITE TABLE request_field SELECT X.ngram[0], X.estfrequency FROM (SELECT explode(new_item) AS X FROM request_field_words) Z;
+
 
 --Create Failed Server Reqeusts Table for Potential External Analysis--
 CREATE TABLE IF NOT EXISTS FailedServerRequests ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' AS
@@ -770,7 +789,6 @@ INSERT OVERWRITE LOCAL DIRECTORY '/mnt/hgfs/GitHub/SecurityAnalytics/Shakacon/Re
 SELECT * FROM FailedServerRequests;
 
 SELECT * FROM FailedServerRequests LIMIT 20;
-
 
 
 

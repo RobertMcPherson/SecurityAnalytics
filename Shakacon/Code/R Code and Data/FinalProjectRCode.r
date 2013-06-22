@@ -2,7 +2,6 @@ rm(list=ls()) #Remove any objects
 
 library(fBasics)
 library(sqldf)
-library(ts)
 
 #Import failed requests file, using standard delimeter in Hive
 failedRequests <- read.table("FailedRequestsByDay.txt",sep="")
@@ -47,10 +46,22 @@ str(nonEmptyCols)
 X <- statusFrequenciesNumeric[,which(colSums>0)]
 plot(X)
 
-apply(X, CCF(
+cor(X)
 
-?CCF
+acf(diff(X$"200ok"))
+acf(diff(X$"405methodnotallowed"))
+ccf(y=diff(X$"200ok"),x=diff(X$"405methodnotallowed"),ylab="Cross-correlation")
+ccf(y=diff(X$"405methodnotallowed"[10:length(X$"405methodnotallowed")]),x=diff(X$"405methodnotallowed"),ylab="Cross-correlation")
 
+
+#ts200ok <- ts(X$"200ok",frequency=12)
+#ts200ok.stl <- stl(ts200ok,s.window=5)
+#plot(ts200ok.stl)
+
+?ts
+?stl
+?arima
+?ccf
 
 
 
